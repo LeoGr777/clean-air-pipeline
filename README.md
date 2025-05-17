@@ -35,22 +35,23 @@ An automated, containerized ETL pipeline that fetches air-quality data from Open
 ## 🏗 Architecture
 
 ```mermaid
-graph LR
-    subgraph EC2["AWS EC2 t3.micro (Docker-Compose Stack)"]
-        AFW[Airflow Web]
-        AFS((Airflow Scheduler))
-        PG[(Postgres DB)]
-    end
-
-    OA[OpenAQ API] --> EX[Python Extract Task]
-    AFS -.-> EX
-    EX -->|raw JSON| S3R[(AWS S3 Raw)]
-    S3R --> TR["Python Transform\n(pandas ➜ Parquet)"]
-    AFS -.-> TR
-    TR -->|.parquet| S3P[(AWS S3 Processed)]
-    S3P --> STG[Snowflake Stage]
-    STG -->|COPY INTO| SN[(Snowflake Table)]
-    AFS -.-> STG
+flowchart LR
+ subgraph EC2["AWS EC2 t3.micro<br>(Docker‑Compose Stack)"]
+        spacer((" "))
+        AFW["Airflow Web"]
+        AFS(("Airflow Scheduler"))
+        PG[("Postgres DB")]
+  end
+    OA["OpenAQ API"] --> EX["Python Extract Task"]
+    AFS -.-> EX & TR["Python Transform<br>(pandas ➜ Parquet)"] & STG["Snowflake Stage"]
+    EX -- raw JSON --> S3R[("AWS S3 Raw")]
+    S3R --> TR
+    TR -- ".parquet" --> S3P[("AWS S3 Processed")]
+    S3P --> STG
+    STG -- COPY INTO --> SN[("Snowflake Table")]
+     spacer:::invis
+    classDef invis fill:none,stroke:none
+    style EC2 fill:#ffffff,stroke:#555,stroke-width:1px,padding:20px
 ```
 
 ---

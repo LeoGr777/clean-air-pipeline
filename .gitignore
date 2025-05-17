@@ -10,3 +10,9 @@ __pycache__/
 # Airflow
 logs/
 airflow.db
+
+# Workspace
+clean-air-pipeline.code-workspace
+
+# Readme
+README.md
