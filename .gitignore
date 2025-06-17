@@ -14,7 +14,7 @@ __pycache__/
 logs/
 airflow.db
 
-# Workspace
+# VSCode
 clean-air-pipeline.code-workspace
 
 # Readme
