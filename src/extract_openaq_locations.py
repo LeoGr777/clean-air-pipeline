@@ -9,9 +9,12 @@ import logging
 import requests
 import json
 import datetime as dt
+import boto3
+from typing import cast
 from dateutil import tz
 from dotenv import load_dotenv
-import boto3
+from mypy_boto3_s3.client import S3Client
+
 
 # ─── Load environment variables from .env ────────────────────────────────────────
 # Make sure you have a file `keys.env` or `.env` with:
@@ -39,7 +42,7 @@ logging.basicConfig(
 )
 
 # initialize S3 client (credentials via AWS_PROFILE or instance role)
-s3 = boto3.client("s3")
+s3: S3Client = cast(S3Client, boto3.client("s3")) # type: ignore[reportUnknownMemberType]
 
 
 def fetch_locations():
@@ -81,7 +84,7 @@ def fetch_locations():
     return all_locations
 
 
-def upload_locations(locations: list):
+def upload_locations(locations: list[dict]):
     """
     Serialize the list of locations to JSON and upload to S3 under a timestamped key.
     """
@@ -100,3 +103,4 @@ if __name__ == "__main__":
     locations = fetch_locations()
     # 2) upload the aggregated list to S3
     upload_locations(locations)
+
