@@ -45,7 +45,7 @@ logging.basicConfig(
 s3: S3Client = cast(S3Client, boto3.client("s3")) # type: ignore[reportUnknownMemberType]
 
 
-def fetch_locations():
+def fetch_locations() -> list[dict]:
     """
     Fetch every page of /locations?iso={COUNTRY} from the OpenAQ v3 API.
     Returns a combined list of all location dicts.
@@ -84,7 +84,7 @@ def fetch_locations():
     return all_locations
 
 
-def upload_locations(locations: list[dict]):
+def upload_locations(locations: list[dict]) -> str:
     """
     Serialize the list of locations to JSON and upload to S3 under a timestamped key.
     """
