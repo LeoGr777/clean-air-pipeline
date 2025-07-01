@@ -1,3 +1,4 @@
+# utils/transform_utils.py
 #!/usr/bin/env python3
 """
 Transform raw OpenAQ location JSON dumps into Parquet for DIM_LOCATION and upload to S3.
@@ -31,7 +32,16 @@ logging.basicConfig(level=logging.INFO,
 # initialize S3 client (credentials via AWS_PROFILE or instance role)
 s3: S3Client = cast(S3Client, boto3.client("s3")) # type: ignore[reportUnknownMemberType]
 
-def transform_dim_location_data():
+def transform_dimension_to_parquet(
+    s3: S3Client,
+    bucket: str,
+    raw_prefix: str,
+    output_prefix: str,
+    rename_map: dict,
+    required_cols: list,
+    subset_key: str,
+    filename_prefix: str = "dim_"
+) -> str:
     """
     Airflow-callable function to transform raw OpenAQ location data into DIM_LOCATION
     Parquet files and upload to S3. This function prepares the data to be loaded
@@ -135,4 +145,4 @@ def transform_dim_location_data():
 
 # For local testing outside of Airflow
 if __name__ == "__main__":
-    transform_dim_location_data()
+    transform_dimension_to_parquet()
