@@ -1,73 +1,111 @@
-"""
-Extract task: fetch all OpenAQ locations for a given country,
-upload the raw JSON list to S3.
-"""
 # ### IMPORTS ###
 
 # 1.1 Standard Libraries
 import os
 import logging
+import json
+from datetime import datetime
 
 # 1.2 Third-party libraries
-from dotenv import load_dotenv
+import requests
 import boto3
+from botocore.exceptions import ClientError
 
-# 1.3 Local application modules
-# We now import both the fetch and upload utilities
-from .utils.extract_openaq_utils import fetch_all_pages
-from .utils.extract_openaq_utils  import upload_to_s3
 
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
-load_dotenv()
 
-# Specific constants for this extraction script
-COUNTRY = os.getenv("COUNTRY_CODE", "DE")
+# The script expects load_dotenv() to have been called by the entry point.
+OPENAQ_BASE = os.getenv("OPENAQ_BASE", "https://api.openaq.org/v3")
+API_KEY = os.getenv("API_KEY")
+LIMIT = 1000  # Default limit for paged requests
 
-# S3 specific constants
-S3_BUCKET = os.getenv("S3_BUCKET")
-RAW_S3_ENDPOINT_LOCATIONS = "raw/locations"
-
-# Configure root logger
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - [%(levelname)s] - %(message)s"
-)
-
-# The S3 client is initialized once
-s3 = boto3.client("s3")
 
 # =============================================================================
-# 3. MAIN LOGIC
+# 3. UTILITY FUNCTIONS
 # =============================================================================
-def main():
+
+def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     """
-    Orchestrates the fetching of locations and uploading the result to S3.
+    Fetches all pages for a given API endpoint.
+    Handles API key check and pagination automatically.
     """
-    logging.info(f"Starting locations extraction for country: {COUNTRY}")
+    if not API_KEY:
+        logging.error("API_KEY not found in environment.")
+        raise RuntimeError("API_KEY must be set.")
 
-    # Step 1: Fetch all locations using the utility function
-    locations = fetch_all_pages(endpoint="locations", params={"iso": COUNTRY})
+    url = f"{OPENAQ_BASE}/{endpoint}"
+    headers = {"accept": "application/json", "X-API-Key": API_KEY}
+    all_results = []
+    page = 1
 
-    # Step 2: If data was fetched, upload it to S3
-    if locations:
-        logging.info(f"Successfully fetched {len(locations)} locations.")
+    while True:
+        request_params = params.copy()
+        request_params["limit"] = LIMIT
+        request_params["page"] = page
+        
+        logging.info(f"Requesting page {page} for endpoint '{endpoint}' with params {params}")
+        
+        try:
+            response = requests.get(url, params=request_params, headers=headers, timeout=30)
+            response.raise_for_status()
 
-        # Call the generic S3 upload utility function
-        upload_to_s3(
-            s3_client=s3,
-            bucket_name=S3_BUCKET,
-            endpoint=RAW_S3_ENDPOINT_LOCATIONS,
-            data=locations
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                logging.info("No more results returned; ending pagination.")
+                break
+
+            all_results.extend(results)
+            logging.info(f"Page {page}: fetched {len(results)} items (total: {len(all_results)})")
+            
+            if len(results) < LIMIT:
+                logging.info("Last page reached.")
+                break
+                
+            page += 1
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request error: {e}")
+            raise
+
+    logging.info(f"Total items fetched for endpoint '{endpoint}': {len(all_results)}")
+    return all_results
+
+
+def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data: list[dict]):
+    """
+    Uploads a list of dictionaries as a JSON file to an S3 bucket.
+    The filename includes a timestamp for uniqueness.
+    """
+    if not bucket_name:
+        logging.error("S3_BUCKET environment variable not set.")
+        raise ValueError("S3 bucket name is required.")
+
+    # Create a unique filename with a timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"{timestamp}.json"
+    
+    # The S3 object key is the combination of the endpoint path and the filename
+    s3_key = f"{endpoint}/{file_name}"
+
+    try:
+        # Convert Python list of dicts to a JSON string
+        json_data = json.dumps(data, indent=4)
+
+        logging.info(f"Uploading {file_name} to s3://{bucket_name}/{s3_key}")
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=s3_key,
+            Body=json_data
         )
-    else:
-        logging.warning("No locations were fetched. Nothing to upload.")
+        logging.info("Upload successful.")
 
-    logging.info("Locations extraction task finished.")
-
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
-if __name__ == "__main__":
-    main()
+    except ClientError as e:
+        logging.error(f"S3 upload failed: {e}")
+        raise
+    except TypeError as e:
+        logging.error(f"Data serialization to JSON failed: {e}")
+        raise
