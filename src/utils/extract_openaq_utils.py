@@ -86,11 +86,12 @@ def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data:
         raise ValueError("S3 bucket name is required.")
 
     # Create a unique filename with a timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    prefix = datetime.now().strftime("%Y/%m/%d")
     file_name = f"{timestamp}.json"
     
     # The S3 object key is the combination of the endpoint path and the filename
-    s3_key = f"{endpoint}/{file_name}"
+    s3_key = f"{endpoint}/{prefix}/{file_name}"
 
     try:
         # Convert Python list of dicts to a JSON string
