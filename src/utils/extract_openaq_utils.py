@@ -1,69 +1,111 @@
 # ### IMPORTS ###
 
 # 1.1 Standard Libraries
-import io
-import json
+import os
 import logging
-import datetime as dt
-from typing import Any, Dict, List, Optional
+import json
+from datetime import datetime
 
 # 1.2 Third-party libraries
-import pandas as pd
+import requests
+import boto3
+from botocore.exceptions import ClientError
 
 
-def list_s3_keys_by_prefix(
-    s3_client: Any, bucket_name: str, prefix: str
-) -> List[str]:
-    """Lists all object keys in S3 under a given prefix."""
-    paginator = s3_client.get_paginator("list_objects_v2")
-    keys = []
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix.rstrip("/") + "/"):
-        for obj in page.get("Contents", []):
-            keys.append(obj["Key"])
-    logging.info(f"Discovered {len(keys)} raw files under s3://{bucket_name}/{prefix}")
-    return keys
+# =============================================================================
+# 2. CONSTANTS AND GLOBAL SETTINGS
+# =============================================================================
+
+# The script expects load_dotenv() to have been called by the entry point.
+OPENAQ_BASE = os.getenv("OPENAQ_BASE", "https://api.openaq.org/v3")
+API_KEY = os.getenv("API_KEY")
+LIMIT = 1000  # Default limit for paged requests
 
 
-def transform_json_to_parquet(
-    s3_client: Any,
-    bucket_name: str,
-    source_key: str,
-    processed_prefix: str,
-    column_rename_map: Optional[Dict[str, str]] = None,
-) -> str:
+# =============================================================================
+# 3. UTILITY FUNCTIONS
+# =============================================================================
+
+def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     """
-    Generic transformation task for a single JSON file.
+    Fetches all pages for a given API endpoint.
+    Handles API key check and pagination automatically.
+    """
+    if not API_KEY:
+        logging.error("API_KEY not found in environment.")
+        raise RuntimeError("API_KEY must be set.")
+
+    url = f"{OPENAQ_BASE}/{endpoint}"
+    headers = {"accept": "application/json", "X-API-Key": API_KEY}
+    all_results = []
+    page = 1
+
+    while True:
+        request_params = params.copy()
+        request_params["limit"] = LIMIT
+        request_params["page"] = page
+        
+        logging.info(f"Requesting page {page} for endpoint '{endpoint}' with params {params}")
+        
+        try:
+            response = requests.get(url, params=request_params, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                logging.info("No more results returned; ending pagination.")
+                break
+
+            all_results.extend(results)
+            logging.info(f"Page {page}: fetched {len(results)} items (total: {len(all_results)})")
+            
+            if len(results) < LIMIT:
+                logging.info("Last page reached.")
+                break
+                
+            page += 1
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request error: {e}")
+            raise
+
+    logging.info(f"Total items fetched for endpoint '{endpoint}': {len(all_results)}")
+    return all_results
+
+
+def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data: list[dict]):
+    """
+    Uploads a list of dictionaries as a JSON file to an S3 bucket.
+    The filename includes a timestamp for uniqueness.
+    """
+    if not bucket_name:
+        logging.error("S3_BUCKET environment variable not set.")
+        raise ValueError("S3 bucket name is required.")
+
+    # Create a unique filename with a timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"{timestamp}.json"
     
-    1. Downloads a raw JSON list from S3.
-    2. Normalizes it into a pandas DataFrame.
-    3. Optionally renames columns based on a provided map.
-    4. Writes the DataFrame to Parquet in-memory.
-    5. Uploads the Parquet bytes to a processed prefix in S3.
-    """
-    logging.info(f"Downloading: s3://{bucket_name}/{source_key}")
-    obj = s3_client.get_object(Bucket=bucket_name, Key=source_key)
-    raw_list = json.loads(obj["Body"].read())
+    # The S3 object key is the combination of the endpoint path and the filename
+    s3_key = f"{endpoint}/{file_name}"
 
-    df = pd.json_normalize(raw_list, sep="_")
+    try:
+        # Convert Python list of dicts to a JSON string
+        json_data = json.dumps(data, indent=4)
 
-    if column_rename_map:
-        df = df.rename(columns=column_rename_map)
+        logging.info(f"Uploading {file_name} to s3://{bucket_name}/{s3_key}")
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=s3_key,
+            Body=json_data
+        )
+        logging.info("Upload successful.")
 
-    df["ingest_ts"] = dt.datetime.now(dt.timezone.utc)
-
-    buffer = io.BytesIO()
-    df.to_parquet(buffer, index=False, engine="pyarrow")
-    buffer.seek(0)
-
-    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
-    year, month, day = ts[:4], ts[4:6], ts[6:8]
-    parquet_key = f"{processed_prefix.rstrip('/')}/{year}/{month}/{day}/{ts}.parquet"
-
-    s3_client.put_object(
-        Bucket=bucket_name,
-        Key=parquet_key,
-        Body=buffer.read(),
-        ContentType="application/octet-stream",
-    )
-    logging.info(f"Uploaded Parquet -> s3://{bucket_name}/{parquet_key}")
-    return parquet_key
+    except ClientError as e:
+        logging.error(f"S3 upload failed: {e}")
+        raise
+    except TypeError as e:
+        logging.error(f"Data serialization to JSON failed: {e}")
+        raise
