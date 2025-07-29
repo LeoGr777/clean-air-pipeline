@@ -1,3 +1,7 @@
+"""
+Utility function to transform openaq raw json data to parquet files and upload to S3.
+"""
+
 # ### IMPORTS ###
 
 # 1.1 Standard Libraries
@@ -81,7 +85,8 @@ def transform_json_to_parquet(
 
     ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
     year, month, day = ts[:4], ts[4:6], ts[6:8]
-    parquet_key = f"{processed_prefix.rstrip('/')}/{year}/{month}/{day}/{ts}.parquet"
+    prefix = f"{year}/{month}/{day}"
+    parquet_key = f"{processed_prefix.rstrip('/')}/{prefix}/{ts}.parquet"
 
     s3_client.put_object(
         Bucket=bucket_name,
@@ -91,26 +96,25 @@ def transform_json_to_parquet(
     )
     logging.info(f"Uploaded Parquet -> s3://{bucket_name}/{parquet_key}")
 
-    # 7. Archive processed files and delete old file
+    return final_df
+
+def archive_s3_file(s3_client, bucket_name: str, source_key: str):
+    """Copies a file to an archive location and deletes the original."""
     try:
+        # Define archive path by replacing 'raw/' with 'archive/'
         archive_key = source_key.replace("raw/", "archive/", 1)
         
-        # 1. Copy the object to the archive location
+        # Copy the object
         s3_client.copy_object(
             Bucket=bucket_name,
-            CopySource={"Bucket": bucket_name, "Key": source_key},
+            CopySource={'Bucket': bucket_name, 'Key': source_key},
             Key=archive_key
         )
         
-        # 2. Delete the original object from the raw location
-        s3_client.delete_object(
-            Bucket=bucket_name,
-            Key=source_key
-        )
-        logging.info(f"Archived {source_key} to {archive_key}")
+        # Delete the original object
+        s3_client.delete_object(Bucket=bucket_name, Key=source_key)
+        logging.info(f"Successfully archived {source_key} to {archive_key}")
 
     except Exception as e:
         logging.error(f"Failed to archive {source_key}: {e}")
-
-
-    return parquet_key
+        raise
