@@ -18,7 +18,6 @@ from botocore.exceptions import ClientError
 
 # The script expects load_dotenv() to have been called by the entry point.
 OPENAQ_BASE = os.getenv("OPENAQ_BASE", "https://api.openaq.org/v3")
-API_KEY = os.getenv("API_KEY")
 LIMIT = 1000  # Default limit for paged requests
 
 
@@ -31,6 +30,8 @@ def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     Fetches all pages for a given API endpoint.
     Handles API key check and pagination automatically.
     """
+    API_KEY = os.getenv("API_KEY")
+
     if not API_KEY:
         logging.error("API_KEY not found in environment.")
         raise RuntimeError("API_KEY must be set.")
