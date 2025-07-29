@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import boto3
 
 # 1.3 Local application modules
-from .utils.transform_utils import list_s3_keys_by_prefix, transform_json_to_parquet
+from utils.transform_utils import list_s3_keys_by_prefix, transform_json_to_parquet
 
 
 # ─── Load env vars and set up logging ──────────────────────────────────────────
