@@ -4,7 +4,7 @@
 import os
 import logging
 import json
-from datetime import datetime
+import datetime as dt
 
 # 1.2 Third-party libraries
 import requests
@@ -76,7 +76,7 @@ def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     return all_results
 
 
-def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data: list[dict]):
+def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data: list[dict], file_prefix="data_"):
     """
     Uploads a list of dictionaries as a JSON file to an S3 bucket.
     The filename includes a timestamp for uniqueness.
@@ -86,9 +86,10 @@ def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data:
         raise ValueError("S3 bucket name is required.")
 
     # Create a unique filename with a timestamp
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    prefix = datetime.now().strftime("%Y/%m/%d")
-    file_name = f"{timestamp}.json"
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
+    year, month, day = ts[:4], ts[4:6], ts[6:8]
+    prefix = f"{year}/{month}/{day}"
+    file_name = f"{file_prefix}{ts}.json"
     
     # The S3 object key is the combination of the endpoint path and the filename
     s3_key = f"{endpoint}/{prefix}/{file_name}"
