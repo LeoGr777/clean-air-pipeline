@@ -90,4 +90,27 @@ def transform_json_to_parquet(
         ContentType="application/octet-stream",
     )
     logging.info(f"Uploaded Parquet -> s3://{bucket_name}/{parquet_key}")
+
+    # 7. Archive processed files and delete old file
+    try:
+        archive_key = source_key.replace("raw/", "archive/", 1)
+        
+        # 1. Copy the object to the archive location
+        s3_client.copy_object(
+            Bucket=bucket_name,
+            CopySource={"Bucket": bucket_name, "Key": source_key},
+            Key=archive_key
+        )
+        
+        # 2. Delete the original object from the raw location
+        s3_client.delete_object(
+            Bucket=bucket_name,
+            Key=source_key
+        )
+        logging.info(f"Archived {source_key} to {archive_key}")
+
+    except Exception as e:
+        logging.error(f"Failed to archive {source_key}: {e}")
+
+
     return parquet_key
