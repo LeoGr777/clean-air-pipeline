@@ -10,6 +10,7 @@ import datetime as dt
 import requests
 import boto3
 from botocore.exceptions import ClientError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # =============================================================================
@@ -75,6 +76,43 @@ def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     logging.info(f"Total items fetched for endpoint '{endpoint}': {len(all_results)}")
     return all_results
 
+def fetch_concurrently(urls: list[str]) -> list[dict]:
+    """
+    Fetches data from a list of URLs concurrently using multiple threads.
+    """
+    API_KEY = os.getenv("API_KEY")
+    if not API_KEY:
+        logging.error("API_KEY not found in environment.")
+        raise RuntimeError("API_KEY must be set.")
+
+    headers = {"accept": "application/json", "X-API-Key": API_KEY}
+    all_results = []
+    
+    # This function will be executed by each thread
+    def fetch_url(url):
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to fetch {url}: {e}")
+            return None # Return None on failure
+
+    # Use a thread pool to manage concurrent requests
+    with ThreadPoolExecutor(max_workers=10) as executor: # max_workers can be adjusted
+        future_to_url = {executor.submit(fetch_url, url): url for url in urls}
+        
+        for i, future in enumerate(as_completed(future_to_url), 1):
+            logging.info(f"Processing request {i}/{len(urls)}...")
+            result = future.result()
+            if result: # Only add successful results
+                all_results.append(result)
+
+    logging.info(f"Successfully fetched data from {len(all_results)} URLs.")
+    return all_results
+
+
+
 def read_json_from_s3(s3_client: boto3.client, bucket_name: str, s3_key: str) -> list | None:
     """
     Reads a JSON file from an S3 bucket and loads it into a Python list.
@@ -111,10 +149,6 @@ def read_json_from_s3(s3_client: boto3.client, bucket_name: str, s3_key: str) ->
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         return None
-
-
-
-
 
 
 
