@@ -189,3 +189,46 @@ def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data:
     except TypeError as e:
         logging.error(f"Data serialization to JSON failed: {e}")
         raise
+
+
+def find_latest_s3_key(s3_client: boto3.client, bucket_name: str, prefix: str, file_pattern: str) -> str | None:
+    """
+    Finds the most recently modified object in an S3 prefix that matches a pattern.
+
+    Args:
+        s3_client: The initialized Boto3 S3 client.
+        bucket_name (str): The name of the S3 bucket.
+        prefix (str): The S3 prefix to search within (e.g., "processed/dim_location/").
+        file_pattern (str): The pattern to match in the filename (e.g., "location_id_list_").
+
+    Returns:
+        str: The S3 key of the latest file, or None if no matching files are found.
+    """
+    logging.info(f"Searching for latest file with pattern '{file_pattern}' in s3://{bucket_name}/{prefix}")
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+        
+        latest_file = None
+        latest_mod_time = None
+
+        for page in pages:
+            if "Contents" in page:
+                for obj in page["Contents"]:
+                    key = obj["Key"]
+                    if file_pattern in key:
+                        mod_time = obj["LastModified"]
+                        if latest_mod_time is None or mod_time > latest_mod_time:
+                            latest_mod_time = mod_time
+                            latest_file = key
+        
+        if latest_file:
+            logging.info(f"Found latest file: {latest_file}")
+            return latest_file
+        else:
+            logging.warning(f"No files matching pattern '{file_pattern}' found in prefix.")
+            return None
+
+    except Exception as e:
+        logging.error(f"Failed to search for latest S3 key: {e}")
+        return None
