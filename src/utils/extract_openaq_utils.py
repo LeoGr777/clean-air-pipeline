@@ -75,6 +75,49 @@ def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     logging.info(f"Total items fetched for endpoint '{endpoint}': {len(all_results)}")
     return all_results
 
+def read_json_from_s3(s3_client: boto3.client, bucket_name: str, s3_key: str) -> list | None:
+    """
+    Reads a JSON file from an S3 bucket and loads it into a Python list.
+
+    Args:
+        s3_client: The initialized Boto3 S3 client.
+        bucket_name (str): The name of the S3 bucket.
+        s3_key (str): The full key (path) to the JSON file in the bucket.
+
+    Returns:
+        list: The loaded data as a Python list, or None if an error occurs.
+    """
+    logging.info(f"Reading JSON file from s3://{bucket_name}/{s3_key}")
+    try:
+        # Get the object from S3
+        response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        
+        # Read the object's content and decode it from bytes to a string
+        content = response["Body"].read().decode("utf-8")
+        
+        # Parse the JSON string into a Python list
+        data = json.loads(content)
+        
+        logging.info(f"Successfully read and parsed file {s3_key}")
+        return data
+
+    except ClientError as e:
+        # Handle cases where the file does not exist
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            logging.error(f"File not found at s3://{bucket_name}/{s3_key}")
+        else:
+            logging.error(f"An S3 client error occurred: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        return None
+
+
+
+
+
+
+
 
 def upload_to_s3(s3_client: boto3.client, bucket_name: str, endpoint: str, data: list[dict], file_prefix="data_"):
     """
