@@ -16,6 +16,8 @@ airflow.db
 
 # VSCode
 clean-air-pipeline.code-workspace
+.vscode/
+
 
 # Readme
 README.md
@@ -24,7 +26,7 @@ README.md
 example.md
 
 # Tests
-/tests
+tests/
 
 # Build
 clean_air_pipeline.egg-info/
