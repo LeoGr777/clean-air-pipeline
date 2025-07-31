@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 import boto3
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import fetch_all_pages, upload_to_s3, fetch_concurrently, find_latest_s3_key, read_json_from_s3
+from utils.extract_openaq_utils import fetch_all_pages, upload_to_s3, fetch_sequentially, find_latest_s3_key, read_json_from_s3
 
 
 # =============================================================================
@@ -72,7 +72,7 @@ def main():
     logging.info(f"Prepared {len(urls_to_fetch)} URLs for sensor data fetching.")
 
     # 3. Fetch all data concurrently
-    sensor_data = fetch_concurrently(urls=urls_to_fetch, max_requests_per_minute=25)
+    sensor_data = fetch_sequentially(urls=urls_to_fetch, requests_per_minute=55)
 
     # 4. Upload the combined results to S3
     if sensor_data:
