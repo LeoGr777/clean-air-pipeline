@@ -6,9 +6,6 @@ import logging
 import json
 import datetime as dt
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Semaphore
-import random
 
 # 1.2 Third-party libraries
 import requests
@@ -79,14 +76,10 @@ def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
     logging.info(f"Total items fetched for endpoint '{endpoint}': {len(all_results)}")
     return all_results
 
-def fetch_concurrently(
-    urls: list[str],
-    max_workers: int = 10,
-    max_retries: int = 3,
-    max_requests_per_minute: int = 60
-) -> list[dict]:
+def fetch_sequentially(urls: list[str], requests_per_minute: int = 60) -> list[dict]:
     """
-    Fetches data from URLs concurrently with rate limiting and retry logic.
+    Fetches data from a list of URLs sequentially, one by one,
+    respecting a defined rate limit.
     """
     API_KEY = os.getenv("API_KEY")
     if not API_KEY:
@@ -96,51 +89,22 @@ def fetch_concurrently(
     headers = {"accept": "application/json", "X-API-Key": API_KEY}
     all_results = []
     
-    # Proactive rate limiting: calculate the necessary delay between requests
-    delay = 60.0 / max_requests_per_minute
+    # Calculate the delay needed between each request
+    delay = 60.0 / requests_per_minute
 
-    # Use a Semaphore to limit the number of truly simultaneous connections
-    semaphore = Semaphore(max_workers)
-
-    def fetch_url(url):
-        # This function is executed by each thread
-        with semaphore:
-            for attempt in range(max_retries):
-                try:
-                    response = requests.get(url, headers=headers, timeout=30)
-                    
-                    # Reactive protection: check for 429 Rate Limit error
-                    if response.status_code == 429:
-                        backoff_delay = (2 ** attempt) + random.uniform(0, 1)
-                        logging.warning(
-                            f"Rate limit hit for {url}. Attempt {attempt + 1}/{max_retries}. "
-                            f"Retrying in {backoff_delay:.2f} seconds."
-                        )
-                        time.sleep(backoff_delay)
-                        continue
-
-                    response.raise_for_status()
-                    return response.json()
-
-                except requests.exceptions.RequestException as e:
-                    logging.error(f"Request for {url} failed on attempt {attempt + 1}: {e}")
-                    time.sleep(1)
-                finally:
-                    # Proactive protection: Always wait after a request is attempted
-                    time.sleep(delay)
-            
-            logging.error(f"All {max_retries} retries for {url} failed. Giving up.")
-            return None
-
-    # The ThreadPoolExecutor part remains the same
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_url = {executor.submit(fetch_url, url): url for url in urls}
+    # Loop through each URL one by one
+    for i, url in enumerate(urls, 1):
+        logging.info(f"Requesting {i}/{len(urls)}: {url}")
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            all_results.append(response.json())
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request failed for {url}: {e}")
         
-        for i, future in enumerate(as_completed(future_to_url), 1):
-            logging.info(f"Processing request {i}/{len(urls)}...")
-            result = future.result()
-            if result:
-                all_results.append(result)
+        # Wait for the calculated delay before the next request
+        logging.info(f"Waiting for {delay:.2f} seconds...")
+        time.sleep(delay)
 
     logging.info(f"Successfully fetched data from {len(all_results)} URLs.")
     return all_results
