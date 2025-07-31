@@ -96,7 +96,7 @@ def main():
     
     except Exception as e:
         logging.error(f"Failed to upload location_ids list: {e}. Raw files will NOT be archived.", exc_info=True)
-        # Stoppe hier, damit die Archivierung nicht stattfindet
+        # Stop here to not archive
         return
     
     # --- STEP 3: ARCHIVE LOOP ---
@@ -106,7 +106,7 @@ def main():
             archive_s3_file(s3, BUCKET, key)
         
         except Exception as e:
-            # Logge den Fehler, aber fahre mit dem nächsten File fort
+            # Log the error but continue with next file
             logging.error(f"Could not archive {key}: {e}")
     
     logging.info("Transformation task for dim_location finished.")
