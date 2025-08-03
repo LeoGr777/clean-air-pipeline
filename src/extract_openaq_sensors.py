@@ -46,8 +46,7 @@ def main():
     """
     logging.info(f"Starting sensors extraction task")
 
-    # 1. Get the list of location IDs from S3
-    # 1. Dynamically find the latest location_ids file
+    # Dynamically find the latest location_ids file
     location_key = find_latest_s3_key(
         s3_client=s3,
         bucket_name=S3_BUCKET,
@@ -65,14 +64,22 @@ def main():
     s3_key=location_key
     )
 
-    # 2. Build a list of all URLs to fetch
+    # Build a list of all URLs to fetch
     urls_to_fetch = [f"{BASE_URL}/{loc_id}" for loc_id in location_ids]
     print(urls_to_fetch)
     
     logging.info(f"Prepared {len(urls_to_fetch)} URLs for sensor data fetching.")
 
-    # 3. Fetch all data concurrently
+    # Fetch all data sequentially
     sensor_data = fetch_sequentially(urls=urls_to_fetch, requests_per_minute=55)
+
+    # Instead of uploading the raw sensor_data, create a clean list
+    all_sensor_records = []
+
+    for response in sensor_data:
+        # Check if the response was successful and has a 'results' key
+        if response and "results" in response:
+            all_sensor_records.extend(response["results"])
 
     # 4. Upload the combined results to S3
     if sensor_data:
@@ -80,8 +87,7 @@ def main():
             s3_client=s3,
             bucket_name=S3_BUCKET,
             endpoint=RAW_S3_ENDPOINT_SENSORS,
-            data=sensor_data,
-            file_prefix="sensors_data"
+            data=all_sensor_records,
         )
     else:
         logging.warning("No sensor data was fetched.")
