@@ -25,8 +25,9 @@ README.md
 # Mermaid
 example.md
 
-# Tests
+# Tests & debugs
 tests/
+debug*
 
 # Build
 clean_air_pipeline.egg-info/
