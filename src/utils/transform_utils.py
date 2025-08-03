@@ -45,16 +45,25 @@ def transform_json_to_parquet(
     """
     logging.info(f"Transforming: s3://{bucket_name}/{source_key}")
     
-    # 1. Download and Normalize
+    # Download and Normalize
     obj = s3_client.get_object(Bucket=bucket_name, Key=source_key)
-    raw_list = json.loads(obj["Body"].read())
-    df = pd.json_normalize(raw_list, sep="_")
+    records_to_process = json.loads(obj["Body"].read())
 
-    # 2. Rename columns if a map is provided
+    if not records_to_process:
+        logging.warning("No records to process...")
+        return pd.DataFrame()
+
+    df = pd.json_normalize(records_to_process, sep="_")
+
+
+
+    # df = pd.json_normalize(raw_list, sep="_")
+
+    # Rename columns if a map is provided
     if column_rename_map:
         df = df.rename(columns=column_rename_map)
 
-    # 3. Deduplicate if a subset of columns is provided
+    # Deduplicate if a subset of columns is provided
     if deduplication_subset:
         # Ensure all columns for deduplication exist in the DataFrame
         if all(col in df.columns for col in deduplication_subset):
@@ -64,10 +73,10 @@ def transform_json_to_parquet(
         else:
             logging.warning("Skipping deduplication: a key column is missing.")
 
-    # 4. Add ingestion timestamp
+    # Add ingestion timestamp
     df["ingest_ts"] = dt.datetime.now(dt.timezone.utc)
     
-    # 5. Enforce final schema if a list of columns is provided
+    # Enforce final schema if a list of columns is provided
     if final_columns:
         # This ensures the output always has the same columns in the same order
         final_df = pd.DataFrame()
@@ -78,7 +87,7 @@ def transform_json_to_parquet(
                 final_df[col] = None # Add column with nulls if it was missing
         df = final_df
             
-    # 6. Upload to S3
+    # Upload to S3
     buffer = io.BytesIO()
     df.to_parquet(buffer, index=False, engine="pyarrow")
     buffer.seek(0)
