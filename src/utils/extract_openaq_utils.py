@@ -26,7 +26,7 @@ LIMIT = 1000  # Default limit for paged requests
 # 3. UTILITY FUNCTIONS
 # =============================================================================
 
-def fetch_all_pages(endpoint: str, params: dict) -> list[dict]:
+def fetch_all_pages(endpoint: str, params: dict = None) -> list[dict]:
     """
     Fetches all pages for a given API endpoint.
     Handles API key check and pagination automatically.
