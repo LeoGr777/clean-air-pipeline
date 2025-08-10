@@ -4,15 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clean-air-pipeline"
-version = "0.1.0"
+version = "0.3.0"
 description = "A pipeline to process air quality data from OpenAQ."
+readme = "README.md" 
+authors = [
+    { name = "Leo Grund, email = "leogrund10#@gmail.com" } # Hinzugefügt
+]
+license = { text = "MIT" } 
+python_requires = ">=3.9" 
+
 dependencies = [
     "boto3",
-    "botocore",
     "pandas",
     "python-dotenv",
-    "Requests"
+    "requests"
 ]
+
+[project.urls]
+Homepage = "https://github.com/LeoGr777/clean-air-pipeline" 
+Repository = "https://github.com/LeoGr777/clean-air-pipeline" 
 
 [tool.setuptools.packages.find]
 where = ["src"]
