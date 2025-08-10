@@ -1,42 +1,38 @@
 # Clean Air Pipeline
 
-An automated, containerized ETL pipeline that fetches air-quality data from OpenAQ every three hours, stores raw JSON in AWS S3, transforms it to Parquet with Python, and loads it into Snowflake. Orchestrated with Apache Airflow and deployable on AWS EC2 or any Docker-capable server.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+An automated, containerized ETL pipeline that fetches air-quality data from OpenAQ daily, stores raw JSON in AWS S3, transforms it to Parquet with Python, and loads it into Snowflake as fact-dimensional data model. Orchestrated with Apache Airflow and deployable on AWS EC2 or any Docker-capable server. This pipeline helps researchers and data analysts to quickly obtain processed datasets from public sensors.
 
 ---
 
-## 📋 Contents
+## Features
 
-* [Features](#features)
-* [Architecture](#architecture)
-* [Prerequisites](#prerequisites)
-* [Installation & Setup](#installation--setup)
-* [Pipeline Steps](#pipeline-steps)
-* [Project Structure](#project-structure)
-* [Usage](#usage)
-* [Configuration](#configuration)
-* [Troubleshooting](#troubleshooting)
-* [Contributing](#contributing)
-* [License](#license)
+* **Extract:** Pulls PM₂.₅ measurements from OpenAQ for a configurable country.
+* **Raw Storage:** Saves raw JSON using Hive-style partitioning (raw/YYYY/MM/) in local storage or AWS S3.
+* **Transform:** Converts JSON → Parquet (pandas + PyArrow) into `processed/` (or S3/processed).
+* **Load:** Loads Parquet into a pre-defined fact-dimensional model via Snowflake external stage & COPY INTO.
+* **Orchestration:** Airflow DAG with retries, logging, and scheduling.
+* **Container Deployment:** Docker Compose stack for Airflow, Postgres, ETL.
+* **Auto-run:** 24/7 operation on AWS EC2 (t2.micro) or any VPS.
 
 ---
 
-## 🔥 Features
+## Components & Architecture
 
-* **Extract:** Pulls PM₂.₅ measurements from OpenAQ for a configurable city
-* **Raw Storage:** Saves raw JSON into `raw/YYYY/MM/` (or S3/raw)
-* **Transform:** Converts JSON → Parquet (pandas + PyArrow) into `processed/` (or S3/processed)
-* **Load:** Loads Parquet via Snowflake external stage & `COPY INTO`
-* **Orchestration:** Airflow DAG with retries, logging, and scheduling
-* **Container Deployment:** Docker Compose stack for Airflow, Postgres, ETL, optionally Streamlit
-* **Auto-run:** 24/7 operation on AWS EC2 (t3.micro) or any VPS
+This pipeline is designed to be modular. The core consists of Python scripts running in a Docker environment. The reference implementation shown here uses AWS S3 as a data lake and Snowflake as a data warehouse.
 
----
+### Core Prerequisites (Minimal Setup)
+* **Docker & Docker Compose:** To run the containerized application (Airflow, Python tasks).
+* **Python 3.9+:** Used within the Docker containers.
 
-## 🏗 Architecture
+### Prerequisites for the Reference Implementation (with Cloud)
+* **AWS Account:** Required to store data persistently on **S3**. However, the scripts can be easily adapted to use local file storage instead.
+* **Snowflake Account:** Serves as the target data warehouse. The `LOAD` logic is specific to Snowflake but can serve as a template for loading data into any other SQL database.
 
 ```mermaid
 flowchart LR
- subgraph EC2["AWS EC2 t3.micro<br>(Docker‑Compose Stack)"]
+ subgraph EC2["AWS EC2 t2.micro<br>(Docker‑Compose Stack)"]
         spacer((" "))
         AFW["Airflow Web"]
         AFS(("Airflow Scheduler"))
@@ -56,67 +52,146 @@ flowchart LR
 
 ---
 
-## 🔧 Prerequisites
+## Getting Started: Installation & Setup
 
-* **AWS CLI** configured with S3 PutObject permissions
-* **Docker & Docker Compose** installed (locally or on EC2)
-* **Python 3.9+** with virtual environment support
-* **Snowflake account** (Trial works)
-* Optionally: **Streamlit**, **jq** for local testing
+This guide helps you to set up and run the entire reference implementation. The configuration is managed via a central `.env` file.
 
----
+### 1. Environment Setup
 
-## 🚀 Installation & Setup
+First, clone the repository and set up the Python virtual environment.
 
-1. **Clone the repo**
+```bash
+git clone git@github.com:LeoGr777/clean-air-pipeline.git
+cd clean-air-pipeline
 
-   ```bash
-   git clone git@github.com:LeoGr777/clean-air-pipeline.git
-   cd clean-air-pipeline
-   ```
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
-2. **Create & activate venv**
+# Ensure pip, the package manager, is up-to-date
+pip install --upgrade pip
 
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
+# Install the project dependencies from pyproject.toml
+# -e installs it in "editable" mode
+# [dev] installs the optional development dependencies
+pip install -e ".[dev]"
+```
 
-3. **Initialize folders**
+> [!NOTE]
+> The application will automatically create the necessary local directories like raw/ or processed/ on its first run. A manual mkdir is not required.
 
-   ```bash
-   mkdir -p src raw processed
-   ```
+### 2. Central Configuration
+API Key and identifiers are stored in an .env file. 
 
-4. **Configure AWS CLI**
+```
+# .env file
 
-   ```bash
-   aws configure
-   ```
+# OpenAQ API Access
+API_KEY=your-api-key
 
-5. **Set up Snowflake**
+# AWS Configuration
+AWS_S3_BUCKET=your-bucket-name
+```
+### 3. AWS Setup (S3 & IAM)
+The pipeline requires 
+- An S3 bucket for storage 
+- IAM roles with required permissions for
+  - EC2 to run the pipeline
+  - Snowflake to read from S3
+- Policies to realize permissions
 
-   ```sql
-   CREATE STAGE openaq_stage
-     URL='s3://<your-bucket>/processed'
-     CREDENTIALS=(AWS_KEY_ID='…' AWS_SECRET_KEY='…');
+**EC2 policy:**
+```JSON
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowBucketListing",
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::<YOUR_BUCKET_NAME>"
+        },
+        {
+            "Sid": "AllowObjectActions",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::<YOUR_BUCKET_NAME>/*"
+        }
+    ]
+}
+```
+**Snowflake role policy:**
+```JSON
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion"
+            ],
+            "Resource": "arn:aws:s3:::<YOUR_BUCKET_NAME>/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::<YOUR_BUCKET_NAME>"
+        }
+    ]
+}
+```
+**Snowflake role trust relationship trust policy:** (This step is to be done after creating all objects  within Snowflake which is explained in the following section)
+```JSON
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "<THE_COPIED_STORAGE_AWS_IAM_USER_ARN>"
+            },
+            "Action": "sts:AssumeRole",
+            "Condition": {
+                "StringEquals": {
+                    "sts:ExternalId": "<THE_COPIED_STORAGE_AWS_EXTERNAL_ID>"
+                }
+            }
+        }
+    ]
+}
+```
 
-   CREATE TABLE air_quality (
-     location VARCHAR,
-     parameter VARCHAR,
-     value FLOAT,
-     unit VARCHAR,
-     date_utc TIMESTAMP_LTZ,
-     city VARCHAR,
-     country VARCHAR
-   );
-   ```
+### 4. Snowflake Setup (via Script)
+To avoid manual errors, all required Snowflake objects (Database, Schema, Tables, Stage, etc.) are created by a single script. This script also uses a STORAGE INTEGRATION, which is the secure, recommended way to connect Snowflake to S3 without storing AWS keys in Snowflake.
 
----
+Fill in knowns: Open the setup script setup/snowflake_setup.sql and fill in your SNOWFLAKE_WAREHOUSE and SNOWFLAKE_DATABASE.
 
-## 📝 Pipeline Steps
+Execute the Script: Run the entire SQL script in your Snowflake worksheet. It will create everything needed.
+
+Get Integration Details: After running the script, execute the following command in Snowflake to get the identifiers needed to link AWS and Snowflake:
+
+DESC INTEGRATION s3_integration;
+
+Update .env: Copy the STORAGE_AWS_IAM_USER_ARN and STORAGE_AWS_EXTERNAL_ID values from the command output into your .env file.
+
+Update IAM: Grant the IAM User from Step 3 permissions to assume the role created by Snowflake (this step connects the two services).
+
+### 5. Run the Pipeline (section under construction)
+Once your .env file is complete, you can start the entire stack.
+
+docker-compose up -d
+
+This will start Apache Airflow. Open your browser to http://localhost:8080, enable the clean_air_pipeline DAG, and trigger a run.
+
+
+#### Pipeline Steps
 
 1. **extract\_openaq.py**
 
@@ -146,64 +221,39 @@ flowchart LR
 
 ---
 
-## 📂 Project Structure
+## Project Structure (section under construction)
 
 ```
 clean-air-pipeline/
-├── .venv/                  # virtual environment (ignored)
+├── .venv/                  
 ├── raw/                    # raw JSON files (or S3/raw)
 ├── processed/              # Parquet files (or S3/processed)
 ├── src/
-│   ├── extract_openaq.py
-│   ├── transform_openaq.py
-│   └── upload_s3.py
+|   ├── utils/
+|   |   |── __init__.py
+|   |   |── extract_openaq_utils.py
+|   |   |── transform_utils.py
+|   |── __init__.py
+│   ├── extract_openaq_locations.py
+│   ├── extract_openaq_parameters.py
+│   ├── extract_openaq_sensors.py
+│   ├── transform_dim_location.py
+│   ├── transform_dim_parameter.py
+│   ├── transform_dim_sensor.py
 ├── dags/
 │   └── openaq_pipeline.py
+├── tests/
 ├── docker-compose.yaml
 ├── Dockerfile              # ETL container
-├── requirements.txt
+├── .env
+├── .gitignore
+├── pyproject.TOML
 └── README.md
 ```
 
 ---
 
-## ▶️ Usage
-
-### Locally with Python
-
-```bash
-source .venv/bin/activate
-python src/extract_openaq.py
-python src/transform_openaq.py
-```
-
-### With Docker Compose
-
-```bash
-docker compose up -d
-# Airflow UI: http://localhost:8080
-```
-
----
-
-## ⚙️ Configuration
-
-Use a `.env` file at project root:
-
-```
-CITY=Berlin
-COUNTRY=DE
-PARAMETER=pm25
-BUCKET=clean-air
-SNOWFLAKE_USER=...
-SNOWFLAKE_ROLE=...
-```
-
-Docker Compose reads it via `env_file: .env`.
-
----
-
-## 🐞 Troubleshooting
+## Troubleshooting
 
 * **Permission denied (publickey)** → missing SSH key on GitHub
 * **AWS 403** → check S3 bucket policy
@@ -212,7 +262,7 @@ Docker Compose reads it via `env_file: .env`.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Open an issue or feature request
 2. Fork and create a feature branch
@@ -221,6 +271,6 @@ Docker Compose reads it via `env_file: .env`.
 
 ---
 
-## 📄 License
+## License
 
 MIT © 2025 LeoGr777

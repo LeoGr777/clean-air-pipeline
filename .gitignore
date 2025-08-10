@@ -18,10 +18,6 @@ airflow.db
 clean-air-pipeline.code-workspace
 .vscode/
 
-
-# Readme
-README.md
-
 # Mermaid
 example.md
 
