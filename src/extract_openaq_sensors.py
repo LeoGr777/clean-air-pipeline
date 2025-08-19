@@ -81,7 +81,7 @@ def main():
         if response and "results" in response:
             all_sensor_records.extend(response["results"])
 
-    # 4. Upload the combined results to S3
+    # Upload the combined results to S3
     if sensor_data:
         upload_to_s3(
             s3_client=s3,
