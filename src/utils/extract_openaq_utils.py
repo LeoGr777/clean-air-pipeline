@@ -230,3 +230,4 @@ def find_latest_s3_key(s3_client: boto3.client, bucket_name: str, prefix: str, f
     except Exception as e:
         logging.error(f"Failed to search for latest S3 key: {e}")
         return None
+        
