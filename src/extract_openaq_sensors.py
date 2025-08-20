@@ -12,6 +12,9 @@ import logging
 from dotenv import load_dotenv
 import boto3
 
+dotenv_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=dotenv_path)
+
 # 1.3 Local application modules
 from utils.extract_openaq_utils import fetch_all_pages, upload_to_s3, fetch_sequentially, find_latest_s3_key, read_json_from_s3
 
@@ -19,8 +22,6 @@ from utils.extract_openaq_utils import fetch_all_pages, upload_to_s3, fetch_sequ
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
-load_dotenv()
-
 # S3 specific constants
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT_SENSORS = "raw/sensors"

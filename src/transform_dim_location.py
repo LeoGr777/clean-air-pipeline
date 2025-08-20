@@ -14,13 +14,14 @@ from dotenv import load_dotenv
 import boto3
 import pandas as pd
 
+dotenv_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=dotenv_path)
+
 # 1.3 Local application modules
 from utils.transform_utils import list_s3_keys_by_prefix, transform_json_to_parquet, archive_s3_file
 from utils.extract_openaq_utils import upload_to_s3
 
-
 # ─── Load env vars and set up logging ──────────────────────────────────────────
-load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
