@@ -6,6 +6,7 @@ import logging
 import json
 import datetime as dt
 import time
+from typing import Any, Optional
 
 # 1.2 Third-party libraries
 import requests
@@ -16,11 +17,12 @@ from botocore.exceptions import ClientError
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
-
-# The script expects load_dotenv() to have been called by the entry point.
+# The sript requires dotenv in entrypoint
 OPENAQ_BASE = os.getenv("OPENAQ_BASE", "https://api.openaq.org/v3")
 LIMIT = 1000  # Default limit for paged requests
-
+API_KEY = os.getenv("API_KEY")
+# Define the delay based on the API's rate limit
+DELAY_BETWEEN_REQUESTS = 2 # in seconds
 
 # =============================================================================
 # 3. UTILITY FUNCTIONS
@@ -31,8 +33,6 @@ def fetch_all_pages(endpoint: str, params: dict = None) -> list[dict]:
     Fetches all pages for a given API endpoint.
     Handles API key check and pagination automatically.
     """
-    API_KEY = os.getenv("API_KEY")
-
     if not API_KEY:
         logging.error("API_KEY not found in environment.")
         raise RuntimeError("API_KEY must be set.")
@@ -51,10 +51,15 @@ def fetch_all_pages(endpoint: str, params: dict = None) -> list[dict]:
         
         try:
             response = requests.get(url, params=request_params, headers=headers, timeout=30)
+
             response.raise_for_status()
 
             data = response.json()
             results = data.get("results", [])
+
+            # Pause here to stay within API rate limit
+            logging.info(f"Waiting for {DELAY_BETWEEN_REQUESTS} second(s) before next request...")
+            time.sleep(DELAY_BETWEEN_REQUESTS)
             
             if not results:
                 logging.info("No more results returned; ending pagination.")
@@ -68,7 +73,7 @@ def fetch_all_pages(endpoint: str, params: dict = None) -> list[dict]:
                 break
                 
             page += 1
-
+            
         except requests.exceptions.RequestException as e:
             logging.error(f"Request error: {e}")
             raise
@@ -81,7 +86,6 @@ def fetch_sequentially(urls: list[str], requests_per_minute: int = 60) -> list[d
     Fetches data from a list of URLs sequentially, one by one,
     respecting a defined rate limit.
     """
-    API_KEY = os.getenv("API_KEY")
     if not API_KEY:
         logging.error("API_KEY not found in environment.")
         raise RuntimeError("API_KEY must be set.")
@@ -108,6 +112,31 @@ def fetch_sequentially(urls: list[str], requests_per_minute: int = 60) -> list[d
 
     logging.info(f"Successfully fetched data from {len(all_results)} URLs.")
     return all_results
+
+def fetch_single_url(url: str, params: dict[str, Any]) -> Optional[dict[str, Any] | list[Any]]:
+    """
+    Fetches data from a single URL and returns the JSON response or None on error.
+    
+    Args:
+        url: The URL to fetch from.
+        params: A dictionary of query parameters for the request.
+        
+    Returns:
+        The JSON response as a dictionary or list on success, otherwise None.
+    """
+    if not API_KEY:
+        logging.error("API_KEY not found in environment.")
+        raise RuntimeError("API_KEY must be set.")
+    
+    headers = {"accept": "application/json", "X-API-Key": API_KEY}
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch {url}: {e}")
+        return None
 
 
 
