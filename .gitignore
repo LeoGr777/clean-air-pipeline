@@ -22,7 +22,7 @@ clean-air-pipeline.code-workspace
 example.md
 
 # Tests & debugs
-tests/
+test*
 debug*
 
 # Build
