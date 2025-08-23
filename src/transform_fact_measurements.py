@@ -21,7 +21,7 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import read_json_from_s3
+from utils.extract_openaq_utils import read_json_from_s3, find_latest_s3_key
 from utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, archive_s3_file
 
 # ─── Load env vars and set up logging ──────────────────────────────────────────
@@ -31,15 +31,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 BUCKET = os.getenv("S3_BUCKET")
 RAW_PREFIX = "raw/measurements"
 PROCESSED_PREFIX = "processed/fact_measurements"
+REQUIRED_DIMENSION_TABLE = "dim_sensor"
+SENSOR_PREFIX = "processed/dim_sensor"
 
 # Transformation parameters
 COLUMN_RENAME_MAP = {
     "period_datetimeFrom_utc": "utc_timestamp",
+    "sensor_id": "openaq_sensor_id"
 
 }
 FINAL_COLUMNS = [
     "value",
-    "sensor_id",
+    "openaq_sensor_id",
     "parameter_id",
     "utc_timestamp",
     "ingest_ts"
@@ -55,6 +58,16 @@ def main():
 
     s3 = boto3.client("s3")
     # raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
+
+    logging.info(f"Loading required dimension table: {REQUIRED_DIMENSION_TABLE}")
+
+    dim_sensor_key = find_latest_s3_key(s3, BUCKET, SENSOR_PREFIX, ".parquet")
+    dim_sensor_df = pd.read_parquet(f"s3://{BUCKET}/{dim_sensor_key}")
+
+    # TESTING
+    # print(dim_sensor_key)
+    #print(dim_sensor_df.head())
+    #exit()
 
     # TESTING
     raw_keys = [
@@ -83,7 +96,7 @@ def main():
             continue
 
         # TESTING
-        print(sensor_id)
+       #print(sensor_id)
 
         # Process file
         # Read file
@@ -108,10 +121,19 @@ def main():
 
             # TESTING
             #print(all_records)
+    
+    # Check if any records were collected at all
+    if not all_records:
+        logging.warning("No valid records found after processing all files. Exiting.")
+        return
+        
+    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
 
-        # Transform Records to df
+    # Transform Records to df
+    measurements_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS)
 
-        df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS)
+    # Convert the column to the nullable integer type
+    measurements_df['openaq_sensor_id'] = measurements_df['openaq_sensor_id'].astype('Int64')
 
         # TESTING
         # Get all column names and sort them alphabetically
@@ -121,8 +143,16 @@ def main():
        # print(sorted_column_list)
 
         # Transform
-        print(df)
-                
+        #print(df)
+    print(dim_sensor_df.info())
+    print(measurements_df.info())
+    #exit()
+
+    # Merge dim_sensor + fact_measurement dfs
+    logging.info("Enriching measurement data with sensor dimensions...")
+    fact_measurements_df = pd.merge(measurements_df, dim_sensor_df, on="openaq_sensor_id", how="left")
+
+    print(fact_measurements_df.head())
 
             
         
