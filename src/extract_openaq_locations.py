@@ -7,12 +7,13 @@ import logging
 # 1.2 Third-party libraries
 from dotenv import load_dotenv
 import boto3
+from pathlib import Path 
 
 dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import fetch_all_pages, upload_to_s3
+from utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3, get_yesterday_iso_date
 
 
 # =============================================================================
@@ -24,6 +25,8 @@ COUNTRY = os.getenv("COUNTRY_CODE", "DE")
 # S3 specific constants
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT_LOCATIONS = "raw/locations"
+BASE_URL = "https://api.openaq.org/v3"
+EDNDPOINT = "locations"
 
 
 # Configure root logger
@@ -44,22 +47,32 @@ def main():
     """
     logging.info(f"Starting locations extraction for country: {COUNTRY}")
 
-    # Step 1: Fetch all locations using the utility function
-    locations = fetch_all_pages(endpoint="locations", params={"iso": COUNTRY})
+    # Fetch only data from yesterday
+    URL_PARAMS = {"datetime_from": get_yesterday_iso_date()}
 
-    # Step 2: If data was fetched, upload it to S3
-    if locations:
-        logging.info(f"Successfully fetched {len(locations)} locations.")
+    logging.info("Starting paginated data fetching...")
+
+    response_data = fetch_all_pages_new(endpoint="locations", params={"iso": COUNTRY})
+
+    # Build file_prefix
+    resource = RAW_S3_ENDPOINT_LOCATIONS.split("/")[1]
+    file_prefix = f"{resource}"
+
+    # Upload to S3
+    if response_data:
+        logging.info(f"Successfully fetched {len(response_data)} locations.")
 
         # Call the generic S3 upload utility function
         upload_to_s3(
             s3_client=s3,
             bucket_name=S3_BUCKET,
             endpoint=RAW_S3_ENDPOINT_LOCATIONS,
-            data=locations
+            data=response_data,
+            file_prefix=file_prefix,
         )
     else:
         logging.warning("No locations were fetched. Nothing to upload.")
+        return
 
     logging.info("Locations extraction task finished.")
 
