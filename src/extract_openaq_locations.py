@@ -28,7 +28,7 @@ COUNTRY = os.getenv("COUNTRY_CODE", "DE")
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT_LOCATIONS = "raw/locations"
 BASE_URL = "https://api.openaq.org/v3"
-EDNDPOINT = "locations"
+ENDPOINT = "locations"
 
 
 # Configure root logger
@@ -53,7 +53,7 @@ def main():
 
     logging.info("Starting paginated data fetching...")
 
-    response_data = fetch_all_pages_new(endpoint="locations", params=URL_PARAMS)
+    response_data = fetch_all_pages_new(ENDPOINT, URL_PARAMS)
 
     # Build file_prefix
     resource = RAW_S3_ENDPOINT_LOCATIONS.split("/")[1]
