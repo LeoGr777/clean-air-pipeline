@@ -43,7 +43,6 @@ COLUMN_RENAME_MAP = {
     "timezone": "timezone",
 }
 
-
 FINAL_SCHEMA = {
     COLUMN_RENAME_MAP["id"]: "Int64",
     COLUMN_RENAME_MAP["name"]: "string",
@@ -110,10 +109,10 @@ def main():
     # parquet_buffer = io.BytesIO(parquet_bytes)
     # parquet_df = pd.read_parquet(parquet_buffer)
 
-    # Create S3 Key for locations.pqrquet
+    # Create S3 Key for locations.parquet
     s3_key = create_s3_key(PROCESSED_PREFIX, "locations", ".parquet")
 
-    # Upload to S3 for locations.pqrquet
+    # Upload to S3 for locations.parquet
     upload_bytes_to_s3(s3, BUCKET, s3_key, parquet_bytes)
 
     # Archive processed raw locations
