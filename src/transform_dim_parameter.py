@@ -8,6 +8,7 @@ Transforms raw parameter data and uploads it to S3.
 import os
 import logging
 import datetime as dt
+from pathlib import Path 
 
 # 1.2 Third-party libraries
 from dotenv import load_dotenv
@@ -18,7 +19,8 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.transform_utils import list_s3_keys_by_prefix, transform_json_to_parquet, archive_s3_file
+from utils.extract_openaq_utils import read_json_from_s3, create_s3_key, upload_bytes_to_s3
+from utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
 
 # ─── Load env vars and set up logging ──────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -30,57 +32,76 @@ RAW_PREFIX = "raw/parameters"
 PROCESSED_PREFIX = "processed/dim_parameter"
 
 # This map is the SINGLE SOURCE OF TRUTH for columns
-PARAMETERS_COLUMN_MAP = {
+COLUMN_RENAME_MAP = {
     "id": "openaq_parameter_id",
     "name": "parameter_name",
     "displayName": "parameter_display_name",
     "units": "parameter_unit"
 }
 
-# The column for deduplication is defined separately
-DEDUPLICATION_COLUMNS = ["openaq_sensor_id"]
+FINAL_SCHEMA = {
+    COLUMN_RENAME_MAP["id"]: "Int64",
+    COLUMN_RENAME_MAP["name"]: "string",
+    COLUMN_RENAME_MAP["displayName"]: "string",
+    COLUMN_RENAME_MAP["units"]: "string",
+    "ingest_ts": "datetime64[ns, UTC]",
+}
 
-# The final schema is now DERIVED from the map's values
-FINAL_COLUMNS = list(PARAMETERS_COLUMN_MAP.values()) + ["ingest_ts"]
+FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
+
+# The column for deduplication is defined separately
+DEDUPLICATION_SUBSET = ["openaq_parameter_id"]
 
 def main():
     """Orchestrates the transformation of parameter files."""
     s3 = boto3.client("s3")
+
     logging.info("Starting transformation task for dim_sensor.")
 
     raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
-    all_processed_dfs = [] # Empty list to collect dataframes
 
-    # --- TRANSFORM LOOP ---
-    for key in raw_keys:
-        try:
-            # Call the generic utility with all the specific configurations
-            processed_df = transform_json_to_parquet(
-                s3_client=s3,
-                bucket_name=BUCKET,
-                source_key=key,
-                processed_prefix=PROCESSED_PREFIX,
-                column_rename_map=PARAMETERS_COLUMN_MAP,
-                deduplication_subset=DEDUPLICATION_COLUMNS,
-                final_columns=FINAL_COLUMNS
-            )
-            if processed_df is not None:
-                all_processed_dfs.append(processed_df)
-        except Exception as e:
-            logging.error(f"Failed to transform {key}: {e}", exc_info=True)
 
-        
-    # --- ARCHIVE LOOP ---
-    logging.info("Archiving processed raw files.")
-    for key in raw_keys:
-        try:
-            archive_s3_file(s3, BUCKET, key)
-        
-        except Exception as e:
-            # # Log the error but continue with next file
-            logging.error(f"Could not archive {key}: {e}")
+    all_records = [] # Empty list to collect dataframes
+
+    logging.info(f"Found {len(raw_keys)} raw files to process.")
+
+    # Loop through each file
+    for source_key in raw_keys:
+        logging.info(f"--- Processing file: {source_key} ---")
+
+        # Process file
+        # Read file
+        parameter = read_json_from_s3(s3, BUCKET, source_key)
+
+        # Add payloads from paginated api responses
+        for page in parameter:
+            records_on_page = page.get("results")
+
+            if records_on_page:
+                all_records.extend(records_on_page)
+
+    # Check if any records were collected at all
+    if not all_records:
+        logging.warning("No valid records found after processing all files. Exiting.")
+        return
     
-    logging.info("Transformation task for dim_parameter finished.")
+    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
+
+    # Transform Records to df
+    parameters_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP,DEDUPLICATION_SUBSET,FINAL_COLUMNS,FINAL_SCHEMA)
+
+    # Transform locations_df to parquet
+    parquet_bytes = df_to_parquet(parameters_df)
+
+    # Create S3 Key for parameters.parquet
+    s3_key = create_s3_key(PROCESSED_PREFIX, "parameters", ".parquet")
+
+    # Upload to S3 for parameters.parquet
+    upload_bytes_to_s3(s3, BUCKET, s3_key, parquet_bytes)
+
+    # Archive processed raw parameters
+    for key in raw_keys:
+        archive_s3_file(s3, BUCKET, key)
 
 # =============================================================================
 # 4. SCRIPT EXECUTION
