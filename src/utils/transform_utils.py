@@ -30,34 +30,24 @@ def list_s3_keys_by_prefix(
     logging.info(f"Discovered {len(keys)} raw files under s3://{bucket_name}/{prefix}")
     return keys
 
-
-def transform_json_to_parquet(
-    s3_client: Any,
-    bucket_name: str,
-    source_key: str,
-    processed_prefix: str,
+def transform_records_to_df(
+    records: List[Dict[str, Any]],
     column_rename_map: Optional[Dict[str, str]] = None,
     deduplication_subset: Optional[List[str]] = None,
     final_columns: Optional[List[str]] = None,
-) -> str:
+    schema: dict | None = None,
+) -> pd.DataFrame:
     """
-    Generic transformation task for a single JSON file with optional steps.
+    Transforms a list of records into a clean, processed Pandas DataFrame.
     """
-    logging.info(f"Transforming: s3://{bucket_name}/{source_key}")
-    
-    # Download and Normalize
-    obj = s3_client.get_object(Bucket=bucket_name, Key=source_key)
-    records_to_process = json.loads(obj["Body"].read())
-
-    if not records_to_process:
-        logging.warning("No records to process...")
+    if not records:
+        logging.warning("Received an empty list of records for transformation.")
         return pd.DataFrame()
 
-    df = pd.json_normalize(records_to_process, sep="_")
+    logging.info(f"Transforming {len(records)} records into a DataFrame.")
 
-
-
-    # df = pd.json_normalize(raw_list, sep="_")
+    # Flatten the list of dictionaries into a DataFrame
+    df = pd.json_normalize(records, sep="_")
 
     # Rename columns if a map is provided
     if column_rename_map:
@@ -71,41 +61,34 @@ def transform_json_to_parquet(
             df = df.drop_duplicates(subset=deduplication_subset, keep='first')
             logging.info(f"Removed {original_rows - len(df)} duplicate records.")
         else:
-            logging.warning("Skipping deduplication: a key column is missing.")
+            logging.warning("Skipping deduplication: one or more key columns are missing from the DataFrame.")
 
     # Add ingestion timestamp
     df["ingest_ts"] = dt.datetime.now(dt.timezone.utc)
+
+    # Apply schema to enforce data types
     
     # Enforce final schema if a list of columns is provided
     if final_columns:
         # This ensures the output always has the same columns in the same order
         final_df = pd.DataFrame()
         for col in final_columns:
-            if col in df:
+            if col in df.columns:
                 final_df[col] = df[col]
             else:
-                final_df[col] = None # Add column with nulls if it was missing
+                # Add column with nulls if it was missing in the source
+                final_df[col] = None 
         df = final_df
             
-    # Upload to S3
-    buffer = io.BytesIO()
-    df.to_parquet(buffer, index=False, engine="pyarrow")
-    buffer.seek(0)
+    logging.info(f"Transformation successful. Final DataFrame has {len(df)} rows and {len(df.columns)} columns.")
+    
+    return df
 
-    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
-    year, month, day = ts[:4], ts[4:6], ts[6:8]
-    prefix = f"{year}/{month}/{day}"
-    parquet_key = f"{processed_prefix.rstrip('/')}/{prefix}/{ts}.parquet"
-
-    s3_client.put_object(
-        Bucket=bucket_name,
-        Key=parquet_key,
-        Body=buffer.read(),
-        ContentType="application/octet-stream",
-    )
-    logging.info(f"Uploaded Parquet -> s3://{bucket_name}/{parquet_key}")
-
-    return final_df
+def df_to_parquet(df: pd.DataFrame) -> bytes:
+        buffer = io.BytesIO()
+        df.to_parquet(buffer, index=False, engine="pyarrow")
+        buffer.seek(0)
+        return buffer.read()   
 
 def archive_s3_file(s3_client, bucket_name: str, source_key: str):
     """Copies a file to an archive location and deletes the original."""
