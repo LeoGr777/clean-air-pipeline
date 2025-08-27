@@ -46,8 +46,7 @@ def main():
     """
     logging.info(f"Starting locations extraction for country: {COUNTRY}")
 
-    # Fetch only data from yesterday
-    URL_PARAMS = {"datetime_from": get_yesterday_iso_date(), "iso": COUNTRY}
+    URL_PARAMS = {"iso": COUNTRY}
 
     logging.info("Starting paginated data fetching...")
 
