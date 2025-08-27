@@ -7,6 +7,7 @@ Extracts parameter endpoint data for a given list of parameters from openaq API 
 # 1.1 Standard Libraries
 import os
 import logging
+from pathlib import Path 
 
 # 1.2 Third-party libraries
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import fetch_sequentially, upload_to_s3
+from utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3
 
 
 # =============================================================================
@@ -26,6 +27,7 @@ from utils.extract_openaq_utils import fetch_sequentially, upload_to_s3
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT_PARAMETERS = "raw/parameters"
 BASE_URL = "https://api.openaq.org/v3/parameters"
+ENDPOINT = "parameters"
 
 
 # Configure root logger
@@ -46,10 +48,11 @@ def main():
     """
     logging.info(f"Starting parameters extraction task")
 
-    # Fetch static url and select first entry to remove outer list
-    parameters = fetch_sequentially(urls=[BASE_URL], requests_per_minute=55)[0]['results']
+    URL_PARAMS = {}
 
-    if parameters:
+    response_data = fetch_all_pages_new(ENDPOINT, URL_PARAMS)
+
+    if response_data:
         logging.info("Starting upload to S3.")
 
         # Call the generic S3 upload utility function
@@ -57,11 +60,11 @@ def main():
             s3_client=s3,
             bucket_name=S3_BUCKET,
             endpoint=RAW_S3_ENDPOINT_PARAMETERS,
-            data=parameters
+            data=response_data
         )
         logging.info("parameters extraction task finished.")
 
-    if not parameters:
+    if not response_data:
         logging.warning("No parameters were fetched. Nothing to upload.")   
 
 # =============================================================================
