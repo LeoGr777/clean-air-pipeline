@@ -1,3 +1,6 @@
+"""
+Extracts location endpoint data from openaq API and uploads it to S3.
+"""
 # ### IMPORTS ###
 
 # 1.1 Standard Libraries
