@@ -15,7 +15,6 @@ load_dotenv(dotenv_path=dotenv_path)
 # 1.3 Local application modules
 from utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3, get_yesterday_iso_date
 
-
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
@@ -48,11 +47,11 @@ def main():
     logging.info(f"Starting locations extraction for country: {COUNTRY}")
 
     # Fetch only data from yesterday
-    URL_PARAMS = {"datetime_from": get_yesterday_iso_date()}
+    URL_PARAMS = {"datetime_from": get_yesterday_iso_date(), "iso": COUNTRY}
 
     logging.info("Starting paginated data fetching...")
 
-    response_data = fetch_all_pages_new(endpoint="locations", params={"iso": COUNTRY})
+    response_data = fetch_all_pages_new(endpoint="locations", params=URL_PARAMS)
 
     # Build file_prefix
     resource = RAW_S3_ENDPOINT_LOCATIONS.split("/")[1]
