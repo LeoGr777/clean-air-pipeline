@@ -19,7 +19,6 @@ load_dotenv(dotenv_path=dotenv_path)
 # 1.3 Local application modules
 from utils.extract_openaq_utils import fetch_all_pages_new, get_yesterday_iso_date, upload_to_s3, find_latest_s3_key, read_json_from_s3
 
-
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
@@ -52,24 +51,30 @@ def main():
     yesterday_iso_string = get_yesterday_iso_date()
     URL_PARAMS = {"datetime_from": yesterday_iso_string}
 
-    # Dynamically find the latest location_ids file
+    # Dynamically find the latest sensor_location file
     location_key = find_latest_s3_key(
         s3_client=s3,
         bucket_name=S3_BUCKET,
         prefix=PROCESSED_LOCATIONS_PREFIX,
-        file_pattern="location_id_list_"
+        file_pattern="sensor_to_location_map"
     )
 
     if not location_key:
         logging.error("Could not find sensor_ids from location task. Aborting.")
         return
     
-    sensor_ids = read_json_from_s3(
+    raw_data_from_s3 = read_json_from_s3(
     s3_client=s3, 
     bucket_name=S3_BUCKET,
     s3_key=location_key
     )
 
+    # Extract the actual mapping dictionary from the list
+    sensor_to_location_map = raw_data_from_s3[0]
+
+    # Create the final list of sensor IDs from the dictionary keys
+    sensor_ids = [int(key) for key in sensor_to_location_map.keys()]
+   
     num_urls = len(sensor_ids)
     logging.info(f"Prepared {num_urls} URLs for sensor data fetching.")
 
@@ -113,7 +118,6 @@ def main():
             logging.exception("Error executing meausurement extract task")
 
     logging.info(f"Finished extract task for sensor for {i}/{num_urls} urls")
-    exit()
 
 # =============================================================================
 # 4. SCRIPT EXECUTION
