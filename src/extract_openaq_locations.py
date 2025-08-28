@@ -22,8 +22,11 @@ from utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3, get_ye
 # 2. CONSTANTS AND GLOBAL SETTINGS
 # =============================================================================
 # Specific constants for this extraction script
-COUNTRY = os.getenv("COUNTRY_CODE", "DE")
-PARAMTER_ID = "2"
+# Filter criteria
+# COUNTRY = os.getenv("COUNTRY_CODE", "DE")
+# PARAMETER_ID = "2"
+COORDINATES = "52.520008,13.404954" # Berlin central
+RADIUS = "15000" # radius in m around central berlin
 
 # S3 specific constants
 S3_BUCKET = os.getenv("S3_BUCKET")
@@ -48,7 +51,12 @@ def main():
     """
     Orchestrates the fetching of locations and uploading the result to S3.
     """
-    URL_PARAMS = {"iso": COUNTRY, "parameters_id": PARAMTER_ID}
+    URL_PARAMS = {
+        #"iso": COUNTRY, 
+        # "parameters_id": PARAMETER_ID,
+        "coordinates": COORDINATES,
+        "radius": RADIUS,
+        }
 
     logging.info(f"Starting locations extraction for {URL_PARAMS}")
 
