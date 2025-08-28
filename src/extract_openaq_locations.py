@@ -23,6 +23,7 @@ from utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3, get_ye
 # =============================================================================
 # Specific constants for this extraction script
 COUNTRY = os.getenv("COUNTRY_CODE", "DE")
+PARAMTER_ID = "2"
 
 # S3 specific constants
 S3_BUCKET = os.getenv("S3_BUCKET")
@@ -47,9 +48,9 @@ def main():
     """
     Orchestrates the fetching of locations and uploading the result to S3.
     """
-    logging.info(f"Starting locations extraction for country: {COUNTRY}")
+    URL_PARAMS = {"iso": COUNTRY, "parameters_id": PARAMTER_ID}
 
-    URL_PARAMS = {"iso": COUNTRY}
+    logging.info(f"Starting locations extraction for {URL_PARAMS}")
 
     logging.info("Starting paginated data fetching...")
 
