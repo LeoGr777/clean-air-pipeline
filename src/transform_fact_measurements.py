@@ -7,9 +7,7 @@ Transforms raw meausurement data and uploads it to S3.
 # 1.1 Standard Libraries
 import os
 import logging
-import datetime as dt
 from pathlib import Path 
-import json
 import re
 
 # 1.2 Third-party libraries
@@ -21,8 +19,8 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import read_json_from_s3, find_latest_s3_key
-from utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, archive_s3_file
+from utils.extract_openaq_utils import read_json_from_s3, find_latest_s3_key, create_s3_key, upload_bytes_to_s3
+from utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
 
 # ─── Load env vars and set up logging ──────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -36,44 +34,40 @@ SENSOR_PREFIX = "processed/dim_sensor"
 
 # Transformation parameters
 COLUMN_RENAME_MAP = {
+    "value": "value",
+    "parameter_id": "openaq_parameter_id",
     "period_datetimeFrom_utc": "utc_timestamp",
-    "sensor_id": "openaq_sensor_id"
-
+    "openaq_sensor_id": "openaq_sensor_id",
+    #"location_id": "location_id", # location_id is being merged manually
 }
-FINAL_COLUMNS = [
-    "value",
-    "openaq_sensor_id",
-    "parameter_id",
-    "utc_timestamp",
-    "ingest_ts"
-]
 
-DEDUPLICATION_SUBSET = ['sensor_id', 'utc_timestamp', 'parameter_id']
+FINAL_SCHEMA = {
+    COLUMN_RENAME_MAP["value"]: "float64",
+    COLUMN_RENAME_MAP["parameter_id"]: "Int64",
+    COLUMN_RENAME_MAP["period_datetimeFrom_utc"]: "datetime64[ns, UTC]",
+    COLUMN_RENAME_MAP["openaq_sensor_id"]: "Int64",
+    # COLUMN_RENAME_MAP["location_id"]: "Int64", # location_id is being merged manually
+    "ingest_ts": "datetime64[ns, UTC]",
+}
+
+FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
+
+DEDUPLICATION_SUBSET = ['openaq_sensor_id', 'utc_timestamp', 'openaq_parameter_id', 'openaq_location_id']
 
 
 def main():
-    """Orchestrates the transformation of measurement (hour of day) files."""
+    """Orchestrates the transformation of measurement (hourly) files."""
 
-    logging.info("Starting measurements transformation (hour of day) task.")
+    logging.info("Starting measurements transformation (hourly) task.")
 
     s3 = boto3.client("s3")
-    # raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
+    
+    raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
 
     logging.info(f"Loading required dimension table: {REQUIRED_DIMENSION_TABLE}")
 
     dim_sensor_key = find_latest_s3_key(s3, BUCKET, SENSOR_PREFIX, ".parquet")
     dim_sensor_df = pd.read_parquet(f"s3://{BUCKET}/{dim_sensor_key}")
-
-    # TESTING
-    # print(dim_sensor_key)
-    #print(dim_sensor_df.head())
-    #exit()
-
-    # TESTING
-    raw_keys = [
-        "raw/measurements/2025/08/22/measurements_sensor_3019_20250822174840.json",
-        "raw/measurements/2025/08/22/measurements_sensor_3018_20250822174837.json"
-    ]  # FOR TESTING
 
     if not raw_keys:
         logging.warning("No raw files found to process. Exiting.")
@@ -87,42 +81,31 @@ def main():
     for source_key in raw_keys:
         logging.info(f"--- Processing file: {source_key} ---")
 
-        # Get sensor_id
+        # Get sensor_id from this specific file
         try:
-            sensor_id = re.search(r"._sensor_(\d+)",source_key, re.IGNORECASE).group(1)
+            sensor_id_str = re.search(r"._sensor_(\d+)", source_key, re.IGNORECASE).group(1)
+            sensor_id = int(sensor_id_str)
         except AttributeError:
-            sensor_id = ""
             logging.warning(f"Could not find sensor_id in filename: {source_key}. Skipping file.")
             continue
 
-        # TESTING
-       #print(sensor_id)
+        # Read the list of page-responses for this file
+        pages = read_json_from_s3(s3, BUCKET, source_key)
+        if not pages:
+            continue
 
-        # Process file
-        # Read file
-        sensor = read_json_from_s3(s3, BUCKET, source_key)
-
-        # Add payloads from paginated api responses
-        for page in sensor:
+        # Temporary list for records from this file
+        records_from_this_file = []
+        for page in pages:
             records_on_page = page.get("results")
-
-            # TESTING
-            #print(records_on_page)
-
             if records_on_page:
-                all_records.extend(records_on_page)
+                records_from_this_file.extend(records_on_page)
 
-            # TESTING
-            #print(all_records)
+        for record in records_from_this_file:
+            record["openaq_sensor_id"] = sensor_id
+        
+        all_records.extend(records_from_this_file)
 
-        # Enrich with sensor_id
-        for record in all_records:
-            record["sensor_id"] = sensor_id
-
-            # TESTING
-            #print(all_records)
-    
-    # Check if any records were collected at all
     if not all_records:
         logging.warning("No valid records found after processing all files. Exiting.")
         return
@@ -130,42 +113,27 @@ def main():
     logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
 
     # Transform Records to df
-    measurements_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS)
-
-    # Convert the column to the nullable integer type
-    measurements_df['openaq_sensor_id'] = measurements_df['openaq_sensor_id'].astype('Int64')
-
-        # TESTING
-        # Get all column names and sort them alphabetically
-        #sorted_column_list = sorted(df.columns)
-
-        # Print the resulting list
-       # print(sorted_column_list)
-
-        # Transform
-        #print(df)
-    print(dim_sensor_df.info())
-    print(measurements_df.info())
-    #exit()
+    measurements_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS, FINAL_SCHEMA)
 
     # Merge dim_sensor + fact_measurement dfs
     logging.info("Enriching measurement data with sensor dimensions...")
     fact_measurements_df = pd.merge(measurements_df, dim_sensor_df, on="openaq_sensor_id", how="left")
 
-    print(fact_measurements_df.head())
+    final_df = fact_measurements_df.drop(columns=["sensor_name", "parameter_id", "ingest_ts_y"])
 
-            
+    # Transform to parquet
+    parquet_bytes = df_to_parquet(final_df)
+
+    # Create S3 Key for sensors.parquet
+    s3_key = create_s3_key(PROCESSED_PREFIX, "sensors", ".parquet")
+
+    # Upload to S3 for measurements.parquet
+    upload_bytes_to_s3(s3, BUCKET, s3_key, parquet_bytes)
+
+    # Archive processed raw files
+    for key in raw_keys:
+       archive_s3_file(s3, BUCKET, key)
         
-        
-
-     
-
-
-
-
-
-
-
 # =============================================================================
 # 4. SCRIPT EXECUTION
 # =============================================================================
