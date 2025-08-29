@@ -20,7 +20,7 @@ FILE_FORMAT = "CLEAN_AIR_DB.PROCESSED.PARQUET_FMT"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
 
-def load_dim_location():
+def load_dim_sensor():
     truncate_table = f"TRUNCATE table {SNOWFLAKE_TABLE};"
     list_stage_content = f"LIST {S3_STAGE_NAME};"
     get_most_recent_s3_key = rf"""
@@ -93,5 +93,5 @@ def load_dim_location():
 # 4. SCRIPT EXECUTION
 # =============================================================================
 if __name__ == "__main__":
-    load_dim_location()
+    load_dim_sensor()
 
