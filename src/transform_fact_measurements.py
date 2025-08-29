@@ -9,6 +9,7 @@ import os
 import logging
 from pathlib import Path 
 import re
+import datetime as dt
 
 # 1.2 Third-party libraries
 from dotenv import load_dotenv
@@ -38,6 +39,8 @@ COLUMN_RENAME_MAP = {
     "parameter_id": "openaq_parameter_id",
     "period_datetimeFrom_utc": "utc_timestamp",
     "openaq_sensor_id": "openaq_sensor_id",
+    "date_id": "date_id",
+    "time_id": "time_id",
     #"location_id": "location_id", # location_id is being merged manually
 }
 
@@ -46,6 +49,8 @@ FINAL_SCHEMA = {
     COLUMN_RENAME_MAP["parameter_id"]: "Int64",
     COLUMN_RENAME_MAP["period_datetimeFrom_utc"]: "datetime64[ns, UTC]",
     COLUMN_RENAME_MAP["openaq_sensor_id"]: "Int64",
+    COLUMN_RENAME_MAP["date_id"]: "Int64",
+    COLUMN_RENAME_MAP["time_id"]: "Int64",
     # COLUMN_RENAME_MAP["location_id"]: "Int64", # location_id is being merged manually
     "ingest_ts": "datetime64[ns, UTC]",
 }
@@ -119,13 +124,19 @@ def main():
     logging.info("Enriching measurement data with sensor dimensions...")
     fact_measurements_df = pd.merge(measurements_df, dim_sensor_df, on="openaq_sensor_id", how="left")
 
+    # Create the 'date_id' column (YYYYMMDD format)
+    fact_measurements_df['date_id'] = fact_measurements_df['utc_timestamp'].dt.strftime('%Y%m%d').astype("Int64")
+
+    # Create the 'time_id' column (HHMMSS format)
+    fact_measurements_df['time_id'] = fact_measurements_df['utc_timestamp'].dt.strftime('%H%M%S').astype("Int64")
+
     final_df = fact_measurements_df.drop(columns=["sensor_name", "parameter_id", "ingest_ts_y"])
 
     # Transform to parquet
     parquet_bytes = df_to_parquet(final_df)
 
     # Create S3 Key for sensors.parquet
-    s3_key = create_s3_key(PROCESSED_PREFIX, "sensors", ".parquet")
+    s3_key = create_s3_key(PROCESSED_PREFIX, "measurements", ".parquet")
 
     # Upload to S3 for measurements.parquet
     upload_bytes_to_s3(s3, BUCKET, s3_key, parquet_bytes)
