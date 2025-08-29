@@ -67,6 +67,15 @@ def transform_records_to_df(
     df["ingest_ts"] = dt.datetime.now(dt.timezone.utc)
 
     # Apply schema to enforce data types
+    if schema:
+        logging.info("Applying final schema and data types...")
+        # Loop to safely apply types only for columns that exist in the DataFrame
+        for col, dtype in schema.items():
+            if col in df.columns:
+                df[col] = df[col].astype(dtype)
+            else:
+                logging.warning(f"Column '{col}' from schema not found in DataFrame. Skipping type cast.")
+    
     
     # Enforce final schema if a list of columns is provided
     if final_columns:
