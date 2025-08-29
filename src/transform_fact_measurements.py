@@ -47,7 +47,7 @@ COLUMN_RENAME_MAP = {
 FINAL_SCHEMA = {
     COLUMN_RENAME_MAP["value"]: "float64",
     COLUMN_RENAME_MAP["parameter_id"]: "Int64",
-    COLUMN_RENAME_MAP["period_datetimeFrom_utc"]: "datetime64[ns, UTC]",
+    COLUMN_RENAME_MAP["period_datetimeFrom_utc"]: "datetime64[ms, UTC]",
     COLUMN_RENAME_MAP["openaq_sensor_id"]: "Int64",
     COLUMN_RENAME_MAP["date_id"]: "Int64",
     COLUMN_RENAME_MAP["time_id"]: "Int64",
@@ -130,6 +130,9 @@ def main():
     # Create the 'time_id' column (HHMMSS format)
     fact_measurements_df['time_id'] = fact_measurements_df['utc_timestamp'].dt.strftime('%H%M%S').astype("Int64")
 
+    # Remove timezone as this causes problems in SF
+    fact_measurements_df['utc_timestamp'] = fact_measurements_df['utc_timestamp'].dt.tz_localize(None)
+
     final_df = fact_measurements_df.drop(columns=["sensor_name", "parameter_id", "ingest_ts_y"])
 
     # Transform to parquet
@@ -143,7 +146,7 @@ def main():
 
     # Archive processed raw files
     for key in raw_keys:
-       archive_s3_file(s3, BUCKET, key)
+      archive_s3_file(s3, BUCKET, key)
         
 # =============================================================================
 # 4. SCRIPT EXECUTION
