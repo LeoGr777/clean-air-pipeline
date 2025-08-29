@@ -16,6 +16,7 @@ S3_BUCKET = os.getenv("S3_BUCKET")
 SNOWFLAKE_TABLE = "dim_parameter"
 S3_STAGE_NAME = "@CLEAN_AIR_DB.PROCESSED.dim_parameter_stage"
 PROCESSED_PREFIX = "processed/dim_parameter"
+FILE_FORMAT = "CLEAN_AIR_DB.PROCESSED.PARQUET_FMT"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
 
@@ -68,6 +69,7 @@ def load_dim_parameter():
                             $1:ingest_ts
                         FROM {S3_STAGE_NAME}
                     )
+                    FILE_FORMAT = {FILE_FORMAT}
                     -- specific S3 key:
                     FILES = ('{s3_key}')
                     FORCE = TRUE;
