@@ -28,3 +28,5 @@ debug*
 
 # Build
 clean_air_pipeline.egg-info/
+pyproject.toml
+
