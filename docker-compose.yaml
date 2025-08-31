@@ -1,0 +1,86 @@
+# docker-compose.yaml
+services:
+  # Service for the PostgreSQL database
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: "5s"
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Service to initialize the Airflow database
+  airflow-init:
+    build: .
+    image: clean-air-pipeline:1.0 # Custom image
+    container_name: airflow_init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+    env_file:
+      - .env
+    command: airflow db migrate
+
+  # Service for the Airflow webserver
+  airflow-webserver:
+    build: .
+    image: clean-air-pipeline:1.0 # Custom image
+    container_name: airflow_webserver
+    restart: always
+    depends_on:
+      - airflow-init
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./src:/opt/airflow/src
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    env_file:
+      - .env
+    command: standalone
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/ --output /dev/null"]
+      interval: "30s"
+      timeout: "10s"
+      retries: 3
+
+# Service for the Airflow scheduler
+  airflow-scheduler:
+    build: .
+    image: clean-air-pipeline:1.0 # Custom image
+    container_name: airflow_scheduler
+    restart: always
+    depends_on:
+      - airflow-init
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./src:/opt/airflow/src
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    env_file:
+      - .env
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname)"]
+      interval: "30s"
+      timeout: "10s"
+      retries: 3
+
+# Declare volumes
+volumes:
+  postgres_data: {}
