@@ -8,10 +8,10 @@ import importlib
 # --- Configuration for DAILY jobs ---
 DAILY_STEPS = [
     {"module": "src.extract_openaq_locations", "function": "main"},
-    {"module": "src.extract_openaq_sensors", "function": "main"},
-    {"module": "src.extract_openaq_meausurements", "function": "main"},
     {"module": "src.transform_dim_location", "function": "main"}, 
-    {"module": "src.transform_dim_sensor", "function": "main"}, 
+    {"module": "src.extract_openaq_sensors", "function": "main"},
+    {"module": "src.transform_dim_sensor", "function": "main"},   
+    {"module": "src.extract_openaq_meausurements", "function": "main"},
     {"module": "src.transform_fact_measurements", "function": "main"}, 
     {"module": "src.load_dim_location", "function": "load_dim_location"},
     {"module": "src.load_dim_sensor", "function": "load_dim_sensor"},
