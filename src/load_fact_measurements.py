@@ -2,7 +2,7 @@
 Merge transformed .parquet files from S3 to analytics.fact_measurements table to Snowflake.
 """
 # ### IMPORTS ###
-from utils.snowflake_connector import get_snowflake_connection
+from .utils.snowflake_connector import get_snowflake_connection
 import logging
 import os
 from dotenv import load_dotenv

@@ -17,7 +17,7 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import fetch_all_pages_new, get_yesterday_iso_date, upload_to_s3, find_latest_s3_key, read_json_from_s3
+from .utils.extract_openaq_utils import fetch_all_pages_new, get_yesterday_iso_date, upload_to_s3, find_latest_s3_key, read_json_from_s3
 
 # =============================================================================
 # 2. CONSTANTS AND GLOBAL SETTINGS

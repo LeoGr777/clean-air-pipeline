@@ -2,7 +2,7 @@
 Load transformed .parquet files from S3 to analytics.dim_parameter table to Snowflake.
 """
 # ### IMPORTS ###
-from utils.snowflake_connector import get_snowflake_connection
+from .utils.snowflake_connector import get_snowflake_connection
 import logging
 import os
 from dotenv import load_dotenv

@@ -35,14 +35,18 @@ def get_snowflake_connection() -> Iterator[SnowflakeConnection]:
 
     conn = None
     try:
-        # Load the private key from the file
-        with open("key/rsa_key.p8", "rb") as key_file:
-            private_key = serialization.load_pem_private_key(
-                key_file.read(),
-                password=os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE").encode()
+        private_key_str = os.getenv("SNOWFLAKE_PRIVATE_KEY")
+        if not private_key_str:
+            raise ValueError("SNOWFLAKE_PRIVATE_KEY environment variable not set.")
+
+        passphrase = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRISE")
+        encoded_passphrase = passphrase.encode() if passphrase else None
+
+        private_key = serialization.load_pem_private_key(
+            private_key_str.encode(),
+            password=encoded_passphrase
         )
 
-        # Get the key in bytes format
         pkb = private_key.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
@@ -59,14 +63,11 @@ def get_snowflake_connection() -> Iterator[SnowflakeConnection]:
             schema=os.getenv("SNOWFLAKE_SCHEMA")
         ) 
         logging.info("Snowflake connection successful")
-        # Pass the connection object to the 'with' block
         yield conn
     except Exception as e:
         logging.error(f"Snowflake connection failed: {e}", exc_info=True)
-        # Re-raise the exception to let the calling script know something went wrong
         raise
     finally:
-        # This block is executed when the 'with' statement is exited
         if conn: 
             conn.close()
             logging.info("Snowflake connection closed.")

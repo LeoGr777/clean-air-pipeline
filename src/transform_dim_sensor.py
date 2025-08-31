@@ -19,8 +19,8 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # 1.3 Local application modules
-from utils.extract_openaq_utils import read_json_from_s3, create_s3_key, find_latest_s3_key, upload_bytes_to_s3
-from utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
+from .utils.extract_openaq_utils import read_json_from_s3, create_s3_key, find_latest_s3_key, upload_bytes_to_s3
+from .utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
 
 
 # ─── Load env vars and set up logging ──────────────────────────────────────────
