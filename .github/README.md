@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An automated, containerized ETL pipeline that fetches air-quality data from OpenAQ daily via Python scripts, stores raw JSON in AWS S3, transforms it to .parquet and loads it into Snowflake as fact-dimensional data model. Orchestrated with Apache Airflow v3 and deployable on AWS EC2 or any Docker-capable server. This pipeline helps researchers and data analysts to quickly obtain processed datasets from public sensors. The deliverable of this pipeline is a fact table (and dimension tables for contect)  containing daily air quality measurements for (e.g. for particles <2.5um) for the specified location.
+An automated, containerized ETL pipeline that fetches air-quality data from OpenAQ daily via Python scripts, stores raw JSON in AWS S3, transforms it to .parquet and loads it into Snowflake as fact-dimensional data model. Orchestrated with Apache Airflow v3 and deployable on AWS EC2 or any Docker-capable server. This pipeline helps researchers and data analysts to quickly obtain processed datasets from public sensors. The deliverable of this pipeline is a fact table (and dimension tables for context)  containing daily air quality measurements for (e.g. for particles <2.5um) for the specified location.
 
 ---
 ## Features
@@ -320,6 +320,8 @@ with DAG(
 
 ```
 clean-air-pipeline/
+├── .github/ 
+|    └── README.md 
 ├── .venv/   
 ├── config      
 ├── dags/
@@ -348,7 +350,6 @@ clean-air-pipeline/
 ├── .gitignore
 ├── dockerfile
 ├── docker-compose.yaml
-├── README.md
 └── requirements.txt
 ```
 
