@@ -55,7 +55,7 @@ x-airflow-common:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
@@ -104,7 +104,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-    restart: always
+    restart: no
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -118,10 +118,17 @@ services:
       timeout: 30s
       retries: 50
       start_period: 30s
-    restart: always
+    restart: no
 
   airflow-apiserver:
     <<: *airflow-common
+    environment:
+      - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=True
+      - AIRFLOW__CORE__STORE_DAG_CODE=False
+      - AIRFLOW__API_WORKERS=2
+      - AIRFLOW__API__WORKER_TIMEOUT=120
+      - AIRFLOW__API__WORKER_REFRESH_INTERVAL=3600
+      - AIRFLOW__API__WEB_SERVER_WORKER_REFRESH_BATCH_SIZE=1
     command: api-server
     ports:
       - "8080:8080"
@@ -131,7 +138,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -139,6 +146,14 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
+    environment:
+      - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=True
+      - AIRFLOW__CORE__STORE_DAG_CODE=False
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=60
+      - AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
+      - AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP=8
+      - AIRFLOW__SCHEDULER__MAX_TIS_PER_QUERY=128
+      - AIRFLOW__CORE__PARALLELISM=8
     command: scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
@@ -146,7 +161,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -161,7 +176,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -184,7 +199,7 @@ services:
       # Required to handle warm shutdown of the celery workers properly
       # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
       DUMB_INIT_SETSID: "0"
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-apiserver:
@@ -201,7 +216,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -288,6 +303,11 @@ services:
         echo "Files in shared volumes:"
         echo
         ls -la /opt/airflow/{logs,dags,plugins,config}
+        echo
+        echo
+        echo "Migrating Airflow metadata DB (Airflow 3.x) ..."
+        /entrypoint airflow db migrate
+        /entrypoint airflow users create --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" --firstname "${_AIRFLOW_WWW_USER_FIRSTNAME:-Admin}" --lastname "${_AIRFLOW_WWW_USER_LASTNAME:-User}" --role Admin --email "${_AIRFLOW_WWW_USER_EMAIL:-admin@example.com}" --password "${_AIRFLOW_WWW_USER_PASSWORD:-airflow}" || /entrypoint airflow users set-password --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" --password "${_AIRFLOW_WWW_USER_PASSWORD:-airflow}"
 
     # yamllint enable rule:line-length
     environment:
@@ -330,7 +350,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: no
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
