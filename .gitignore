@@ -2,6 +2,7 @@
 .env
 key/
 
+
 # Python
 __pycache__/
 *.pyc
@@ -14,6 +15,7 @@ __pycache__/
 # Airflow
 logs/
 airflow.db
+/config
 
 # VSCode
 clean-air-pipeline.code-workspace

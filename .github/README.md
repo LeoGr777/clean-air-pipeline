@@ -322,8 +322,7 @@ with DAG(
 clean-air-pipeline/
 ├── .github/ 
 |    └── README.md 
-├── .venv/   
-├── config      
+├── .venv/       
 ├── dags/
 │   ├── daily_openaq.py
 │   └── weekly_openaq.py    
@@ -347,6 +346,7 @@ clean-air-pipeline/
 │   ├── transform_dim_sensor.py
 │   └── transform_fact_measurement.py            
 ├── .env
+├── .dockerignore
 ├── .gitignore
 ├── dockerfile
 ├── docker-compose.yaml
