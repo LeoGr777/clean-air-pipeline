@@ -1,4 +1,5 @@
 FROM apache/airflow:3.0.6-python3.11
+#FROM apache/airflow:slim-3.0.6-python3.11
 
 USER root
 RUN apt-get update && \
@@ -9,5 +10,5 @@ USER airflow
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r requirements.txt && \ 
     pip install --no-cache-dir asyncpg
