@@ -1,0 +1,30 @@
+# Keys
+.env
+key/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker
+*.log
+*.pid
+
+# VSCode
+clean-air-pipeline.code-workspace
+.vscode/
+
+# Mermaid
+example.md
+
+# Tests & debugs
+test*
+debug*
+
+# Build
+clean_air_pipeline.egg-info/
+pyproject.toml
+
+# Dockerfile
+dockerfile
