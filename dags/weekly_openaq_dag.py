@@ -1,15 +1,17 @@
-import pendulum
+"""
+Airflow DAG for weekly tasks (extract, load, transform)
+"""
 
+# Imports
+import pendulum
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator
-
-# Import the specific runner function for the weekly tasks
 from src.pipeline_runner import run_weekly_pipeline
 
 with DAG(
-    dag_id='weekly_clean_air_etl',
+    dag_id="weekly_clean_air_etl",
     start_date=pendulum.datetime(2025, 8, 30, tz="Europe/Berlin"),
-    schedule='@weekly',
+    schedule="@weekly",
     catchup=False,
     doc_md="""
     ### Weekly Snowflake Load DAG
@@ -21,10 +23,9 @@ with DAG(
     - Stores data on S3 /processed
     - Loads the transformed data into Snowflake dim and fact tables
     """,
-    tags=['weekly', 'load', 'snowflake'],
+    tags=["weekly", "load", "snowflake"],
 ) as dag:
-    
+
     run_weekly_load_task = PythonOperator(
-        task_id='run_weekly_etl',
-        python_callable=run_weekly_pipeline
+        task_id="run_weekly_etl", python_callable=run_weekly_pipeline
     )

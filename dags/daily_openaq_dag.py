@@ -1,15 +1,17 @@
-import pendulum
+"""
+Airflow DAG for daily tasks (extract, load, transform)
+"""
 
+# Imports
+import pendulum
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator
-
-# Import the specific runner function for the daily tasks
 from src.pipeline_runner import run_daily_pipeline
 
 with DAG(
-    dag_id='daily_clean_air_etl',
+    dag_id="daily_clean_air_etl",
     start_date=pendulum.datetime(2025, 8, 30, tz="Europe/Berlin"),
-    schedule='@daily',
+    schedule="@daily",
     catchup=False,
     doc_md="""
     ### Daily Clean Air ETL DAG
@@ -21,10 +23,9 @@ with DAG(
     - Stores data on S3 /processed
     - Loads the transformed data into Snowflake dim and fact tables
     """,
-    tags=['daily', 'etl', 'openaq'],
+    tags=["daily", "etl", "openaq"],
 ) as dag:
-    
+
     run_daily_etl_task = PythonOperator(
-        task_id='run_daily_etl',
-        python_callable=run_daily_pipeline
+        task_id="run_daily_etl", python_callable=run_daily_pipeline
     )
