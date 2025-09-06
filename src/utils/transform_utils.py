@@ -1,26 +1,21 @@
 """
-Utility function to transform openaq raw json data to parquet files and upload to S3.
+Utility module to provide functions helping with transforming data steps.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import io
-import json
 import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional
-
-# 1.2 Third-party libraries
 import pandas as pd
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
 
-def list_s3_keys_by_prefix(
-    s3_client: Any, bucket_name: str, prefix: str
-) -> List[str]:
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
+)
+
+
+def list_s3_keys_by_prefix(s3_client: Any, bucket_name: str, prefix: str) -> List[str]:
     """Lists all object keys in S3 under a given prefix."""
     paginator = s3_client.get_paginator("list_objects_v2")
     keys = []
@@ -29,6 +24,7 @@ def list_s3_keys_by_prefix(
             keys.append(obj["Key"])
     logging.info(f"Discovered {len(keys)} raw files under s3://{bucket_name}/{prefix}")
     return keys
+
 
 def transform_records_to_df(
     records: List[Dict[str, Any]],
@@ -58,10 +54,12 @@ def transform_records_to_df(
         # Ensure all columns for deduplication exist in the DataFrame
         if all(col in df.columns for col in deduplication_subset):
             original_rows = len(df)
-            df = df.drop_duplicates(subset=deduplication_subset, keep='first')
+            df = df.drop_duplicates(subset=deduplication_subset, keep="first")
             logging.info(f"Removed {original_rows - len(df)} duplicate records.")
         else:
-            logging.warning("Skipping deduplication: one or more key columns are missing from the DataFrame.")
+            logging.warning(
+                "Skipping deduplication: one or more key columns are missing from the DataFrame."
+            )
 
     # Add ingestion timestamp
     df["ingest_ts"] = dt.datetime.now(dt.timezone.utc)
@@ -74,9 +72,10 @@ def transform_records_to_df(
             if col in df.columns:
                 df[col] = df[col].astype(dtype)
             else:
-                logging.warning(f"Column '{col}' from schema not found in DataFrame. Skipping type cast.")
-    
-    
+                logging.warning(
+                    f"Column '{col}' from schema not found in DataFrame. Skipping type cast."
+                )
+
     # Enforce final schema if a list of columns is provided
     if final_columns:
         # This ensures the output always has the same columns in the same order
@@ -86,32 +85,36 @@ def transform_records_to_df(
                 final_df[col] = df[col]
             else:
                 # Add column with nulls if it was missing in the source
-                final_df[col] = None 
+                final_df[col] = None
         df = final_df
-            
-    logging.info(f"Transformation successful. Final DataFrame has {len(df)} rows and {len(df.columns)} columns.")
-    
+
+    logging.info(
+        f"Transformation successful. Final DataFrame has {len(df)} rows and {len(df.columns)} columns."
+    )
+
     return df
 
+
 def df_to_parquet(df: pd.DataFrame) -> bytes:
-        buffer = io.BytesIO()
-        df.to_parquet(buffer, index=False, engine="pyarrow")
-        buffer.seek(0)
-        return buffer.read()   
+    buffer = io.BytesIO()
+    df.to_parquet(buffer, index=False, engine="pyarrow")
+    buffer.seek(0)
+    return buffer.read()
+
 
 def archive_s3_file(s3_client, bucket_name: str, source_key: str):
     """Copies a file to an archive location and deletes the original."""
     try:
         # Define archive path by replacing 'raw/' with 'archive/'
         archive_key = source_key.replace("raw/", "archive/", 1)
-        
+
         # Copy the object
         s3_client.copy_object(
             Bucket=bucket_name,
-            CopySource={'Bucket': bucket_name, 'Key': source_key},
-            Key=archive_key
+            CopySource={"Bucket": bucket_name, "Key": source_key},
+            Key=archive_key,
         )
-        
+
         # Delete the original object
         s3_client.delete_object(Bucket=bucket_name, Key=source_key)
         logging.info(f"Successfully archived {source_key} to {archive_key}")

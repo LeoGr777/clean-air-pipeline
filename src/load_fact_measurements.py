@@ -1,14 +1,15 @@
 """
 Merge transformed .parquet files from S3 to analytics.fact_measurements table to Snowflake.
 """
-# ### IMPORTS ###
+
+# Imports
 from .utils.snowflake_connector import get_snowflake_connection
 import logging
 import os
 from dotenv import load_dotenv
-from pathlib import Path 
+from pathlib import Path
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
 # Constants
@@ -18,7 +19,10 @@ S3_STAGE_NAME = "@CLEAN_AIR_DB.PROCESSED.fact_measurements_stage"
 PROCESSED_PREFIX = "processed/fact_measurements"
 FILE_FORMAT = "CLEAN_AIR_DB.PROCESSED.PARQUET_FMT"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
+)
+
 
 def load_fact_measurements():
     truncate_table = f"TRUNCATE table {SNOWFLAKE_TABLE};"
@@ -31,13 +35,13 @@ def load_fact_measurements():
             LIMIT 1;
     """
     preview_table = f"Select * from {SNOWFLAKE_TABLE} Limit 5"
-  
+
     try:
         with get_snowflake_connection() as conn:
             with conn.cursor() as cur:
                 # Truncate table
-                #logging.info(f"Truncating {SNOWFLAKE_TABLE}")
-                #cur.execute(truncate_table)
+                # logging.info(f"Truncating {SNOWFLAKE_TABLE}")
+                # cur.execute(truncate_table)
 
                 # List stage content
                 logging.info(f"Executing: List content of {S3_STAGE_NAME}")
@@ -107,8 +111,8 @@ def load_fact_measurements():
                         UPDATE SET value = source.value;
                 """
                 # Copy into
-                #logging.info(f"Loading data into {SNOWFLAKE_TABLE}")
-                #cur.execute(copy_into)
+                # logging.info(f"Loading data into {SNOWFLAKE_TABLE}")
+                # cur.execute(copy_into)
 
                 # Merge into
                 logging.info(f"Merging data into {SNOWFLAKE_TABLE}")
@@ -120,13 +124,9 @@ def load_fact_measurements():
                 for row in cur:
                     print(row)
 
-
     except Exception as e:
         print(f"The task failed: {e}")
 
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
 if __name__ == "__main__":
     load_fact_measurements()
-

@@ -2,31 +2,33 @@
 Transforms raw meausurement data and uploads it to S3.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
-from pathlib import Path 
+from pathlib import Path
 import re
 import datetime as dt
-
-# 1.2 Third-party libraries
 from dotenv import load_dotenv
 import boto3
 import pandas as pd
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
-from .utils.extract_openaq_utils import read_json_from_s3, find_latest_s3_key, create_s3_key, upload_bytes_to_s3
-from .utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
+from .utils.extract_openaq_utils import (
+    read_json_from_s3,
+    find_latest_s3_key,
+    create_s3_key,
+    upload_bytes_to_s3,
+)
+from .utils.transform_utils import (
+    list_s3_keys_by_prefix,
+    transform_records_to_df,
+    df_to_parquet,
+    archive_s3_file,
+)
 
-# ─── Load env vars and set up logging ──────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-# ─── Configuration Specific to Locations ───────────────────────────────────────
+# Constants
 BUCKET = os.getenv("S3_BUCKET")
 RAW_PREFIX = "raw/measurements"
 PROCESSED_PREFIX = "processed/fact_measurements"
@@ -41,7 +43,7 @@ COLUMN_RENAME_MAP = {
     "openaq_sensor_id": "openaq_sensor_id",
     "date_id": "date_id",
     "time_id": "time_id",
-    #"location_id": "location_id", # location_id is being merged manually
+    # "location_id": "location_id", # location_id is being merged manually
 }
 
 FINAL_SCHEMA = {
@@ -57,7 +59,14 @@ FINAL_SCHEMA = {
 
 FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
 
-DEDUPLICATION_SUBSET = ['openaq_sensor_id', 'utc_timestamp', 'openaq_parameter_id', 'openaq_location_id']
+DEDUPLICATION_SUBSET = [
+    "openaq_sensor_id",
+    "utc_timestamp",
+    "openaq_parameter_id",
+    "openaq_location_id",
+]
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
 def main():
@@ -66,7 +75,7 @@ def main():
     logging.info("Starting measurements transformation (hourly) task.")
 
     s3 = boto3.client("s3")
-    
+
     raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
 
     logging.info(f"Loading required dimension table: {REQUIRED_DIMENSION_TABLE}")
@@ -77,7 +86,7 @@ def main():
     if not raw_keys:
         logging.warning("No raw files found to process. Exiting.")
         return
-    
+
     all_records = []
 
     logging.info(f"Found {len(raw_keys)} raw files to process.")
@@ -88,10 +97,14 @@ def main():
 
         # Get sensor_id from this specific file
         try:
-            sensor_id_str = re.search(r"._sensor_(\d+)", source_key, re.IGNORECASE).group(1)
+            sensor_id_str = re.search(
+                r"._sensor_(\d+)", source_key, re.IGNORECASE
+            ).group(1)
             sensor_id = int(sensor_id_str)
         except AttributeError:
-            logging.warning(f"Could not find sensor_id in filename: {source_key}. Skipping file.")
+            logging.warning(
+                f"Could not find sensor_id in filename: {source_key}. Skipping file."
+            )
             continue
 
         # Read the list of page-responses for this file
@@ -108,32 +121,50 @@ def main():
 
         for record in records_from_this_file:
             record["openaq_sensor_id"] = sensor_id
-        
+
         all_records.extend(records_from_this_file)
 
     if not all_records:
         logging.warning("No valid records found after processing all files. Exiting.")
         return
-        
-    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
+
+    logging.info(
+        f"Collected a total of {len(all_records)} records. Starting final transformation."
+    )
 
     # Transform Records to df
-    measurements_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS, FINAL_SCHEMA)
+    measurements_df = transform_records_to_df(
+        all_records,
+        COLUMN_RENAME_MAP,
+        DEDUPLICATION_SUBSET,
+        FINAL_COLUMNS,
+        FINAL_SCHEMA,
+    )
 
     # Merge dim_sensor + fact_measurement dfs
     logging.info("Enriching measurement data with sensor dimensions...")
-    fact_measurements_df = pd.merge(measurements_df, dim_sensor_df, on="openaq_sensor_id", how="left")
+    fact_measurements_df = pd.merge(
+        measurements_df, dim_sensor_df, on="openaq_sensor_id", how="left"
+    )
 
     # Create the 'date_id' column (YYYYMMDD format)
-    fact_measurements_df['date_id'] = fact_measurements_df['utc_timestamp'].dt.strftime('%Y%m%d').astype("Int64")
+    fact_measurements_df["date_id"] = (
+        fact_measurements_df["utc_timestamp"].dt.strftime("%Y%m%d").astype("Int64")
+    )
 
     # Create the 'time_id' column (HHMMSS format)
-    fact_measurements_df['time_id'] = fact_measurements_df['utc_timestamp'].dt.strftime('%H%M%S').astype("Int64")
+    fact_measurements_df["time_id"] = (
+        fact_measurements_df["utc_timestamp"].dt.strftime("%H%M%S").astype("Int64")
+    )
 
     # Remove timezone as this causes problems in SF
-    fact_measurements_df['utc_timestamp'] = fact_measurements_df['utc_timestamp'].dt.tz_localize(None)
+    fact_measurements_df["utc_timestamp"] = fact_measurements_df[
+        "utc_timestamp"
+    ].dt.tz_localize(None)
 
-    final_df = fact_measurements_df.drop(columns=["sensor_name", "parameter_id", "ingest_ts_y"])
+    final_df = fact_measurements_df.drop(
+        columns=["sensor_name", "parameter_id", "ingest_ts_y"]
+    )
 
     # Transform to parquet
     parquet_bytes = df_to_parquet(final_df)
@@ -146,11 +177,8 @@ def main():
 
     # Archive processed raw files
     for key in raw_keys:
-      archive_s3_file(s3, BUCKET, key)
-        
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+        archive_s3_file(s3, BUCKET, key)
+
+
 if __name__ == "__main__":
     main()
-

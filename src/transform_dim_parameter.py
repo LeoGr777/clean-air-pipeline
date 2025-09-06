@@ -2,31 +2,32 @@
 Transforms raw parameter data and uploads it to S3.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
 import datetime as dt
-from pathlib import Path 
-
-# 1.2 Third-party libraries
+from pathlib import Path
 from dotenv import load_dotenv
 import boto3
 import pandas as pd
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
-from .utils.extract_openaq_utils import read_json_from_s3, create_s3_key, upload_bytes_to_s3
-from .utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
+from .utils.extract_openaq_utils import (
+    read_json_from_s3,
+    create_s3_key,
+    upload_bytes_to_s3,
+)
+from .utils.transform_utils import (
+    list_s3_keys_by_prefix,
+    transform_records_to_df,
+    df_to_parquet,
+    archive_s3_file,
+)
 
-# ─── Load env vars and set up logging ──────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-
-# ─── Configuration Specific to Locations ───────────────────────────────────────
+# Constants
 BUCKET = os.getenv("S3_BUCKET")
 RAW_PREFIX = "raw/parameters"
 PROCESSED_PREFIX = "processed/dim_parameter"
@@ -36,7 +37,7 @@ COLUMN_RENAME_MAP = {
     "id": "openaq_parameter_id",
     "name": "parameter_name",
     "displayName": "parameter_display_name",
-    "units": "parameter_unit"
+    "units": "parameter_unit",
 }
 
 FINAL_SCHEMA = {
@@ -52,6 +53,9 @@ FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
 # The column for deduplication is defined separately
 DEDUPLICATION_SUBSET = ["openaq_parameter_id"]
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
 def main():
     """Orchestrates the transformation of parameter files."""
     s3 = boto3.client("s3")
@@ -60,8 +64,7 @@ def main():
 
     raw_keys = list_s3_keys_by_prefix(s3, BUCKET, RAW_PREFIX)
 
-
-    all_records = [] # Empty list to collect dataframes
+    all_records = []  # Empty list to collect dataframes
 
     logging.info(f"Found {len(raw_keys)} raw files to process.")
 
@@ -84,11 +87,19 @@ def main():
     if not all_records:
         logging.warning("No valid records found after processing all files. Exiting.")
         return
-    
-    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
+
+    logging.info(
+        f"Collected a total of {len(all_records)} records. Starting final transformation."
+    )
 
     # Transform Records to df
-    parameters_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP,DEDUPLICATION_SUBSET,FINAL_COLUMNS,FINAL_SCHEMA)
+    parameters_df = transform_records_to_df(
+        all_records,
+        COLUMN_RENAME_MAP,
+        DEDUPLICATION_SUBSET,
+        FINAL_COLUMNS,
+        FINAL_SCHEMA,
+    )
 
     # Transform locations_df to parquet
     parquet_bytes = df_to_parquet(parameters_df)
@@ -103,8 +114,6 @@ def main():
     for key in raw_keys:
         archive_s3_file(s3, BUCKET, key)
 
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
 if __name__ == "__main__":
     main()

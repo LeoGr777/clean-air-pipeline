@@ -2,32 +2,32 @@
 Transforms raw sensor data and uploads it to S3.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
 import datetime as dt
-
-# 1.2 Third-party libraries
 from dotenv import load_dotenv
 import boto3
 import pandas as pd
-from pathlib import Path 
+from pathlib import Path
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
-from .utils.extract_openaq_utils import read_json_from_s3, create_s3_key, find_latest_s3_key, upload_bytes_to_s3
-from .utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
+from .utils.extract_openaq_utils import (
+    read_json_from_s3,
+    create_s3_key,
+    find_latest_s3_key,
+    upload_bytes_to_s3,
+)
+from .utils.transform_utils import (
+    list_s3_keys_by_prefix,
+    transform_records_to_df,
+    df_to_parquet,
+    archive_s3_file,
+)
 
-
-# ─── Load env vars and set up logging ──────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-
-# ─── Configuration Specific to Locations ───────────────────────────────────────
+# Constants
 BUCKET = os.getenv("S3_BUCKET")
 RAW_PREFIX = "raw/sensors"
 PROCESSED_PREFIX = "processed/dim_sensor"
@@ -54,27 +54,31 @@ FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
 # The column for deduplication is defined separately
 DEDUPLICATION_SUBSET = ["openaq_sensor_id"]
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
 def main():
     """Orchestrates the transformation of sensor files and generates list of sensor_ids."""
-    
+
     logging.info("Starting transformation task for dim_sensor.")
-    
+
     s3 = boto3.client("s3")
 
     # Load sensor_location map
-    map_key = find_latest_s3_key(s3, BUCKET, PROCESSED_LOCATION_PREFIX, "sensor_to_location_map")
+    map_key = find_latest_s3_key(
+        s3, BUCKET, PROCESSED_LOCATION_PREFIX, "sensor_to_location_map"
+    )
 
     sensor_location_map = read_json_from_s3(s3, BUCKET, map_key)
 
     # Create df from sensor_location_map
     sensor_map_dict = sensor_location_map[0]
-    location_id_df = pd.DataFrame(sensor_map_dict.items(), columns=['openaq_sensor_id', 'location_id'])
+    location_id_df = pd.DataFrame(
+        sensor_map_dict.items(), columns=["openaq_sensor_id", "location_id"]
+    )
 
     # Get correct datatype for openaq_sensor_id
-    schema = {
-        'openaq_sensor_id': 'Int64',
-        'location_id': 'Int64'
-    }
+    schema = {"openaq_sensor_id": "Int64", "location_id": "Int64"}
     location_id_df = location_id_df.astype(schema)
 
     # Process sensor data
@@ -85,7 +89,7 @@ def main():
     if not raw_keys:
         logging.warning("No raw files found to process. Exiting.")
         return
-    
+
     all_records = []
 
     logging.info(f"Found {len(raw_keys)} raw files to process.")
@@ -109,14 +113,24 @@ def main():
     if not all_records:
         logging.warning("No valid records found after processing all files. Exiting.")
         return
-        
-    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
+
+    logging.info(
+        f"Collected a total of {len(all_records)} records. Starting final transformation."
+    )
 
     # Transform Records to df
-    sensors_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP, DEDUPLICATION_SUBSET, FINAL_COLUMNS,FINAL_SCHEMA)
+    sensors_df = transform_records_to_df(
+        all_records,
+        COLUMN_RENAME_MAP,
+        DEDUPLICATION_SUBSET,
+        FINAL_COLUMNS,
+        FINAL_SCHEMA,
+    )
 
     # Merge location_id
-    merged_df = pd.merge(left=sensors_df,right=location_id_df,on='openaq_sensor_id',how='left') 
+    merged_df = pd.merge(
+        left=sensors_df, right=location_id_df, on="openaq_sensor_id", how="left"
+    )
 
     # Transform to parquet
     parquet_bytes = df_to_parquet(merged_df)
@@ -126,13 +140,11 @@ def main():
 
     # Upload to S3 for sensors.parquet
     upload_bytes_to_s3(s3, BUCKET, s3_key, parquet_bytes)
-    
+
     # Archive processed raw files
     for key in raw_keys:
         archive_s3_file(s3, BUCKET, key)
-    
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
+
 if __name__ == "__main__":
     main()

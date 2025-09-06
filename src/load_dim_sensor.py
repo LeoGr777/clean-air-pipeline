@@ -1,14 +1,15 @@
 """
 Load transformed .parquet files from S3 to analytics.dim_sensr table to Snowflake.
 """
-# ### IMPORTS ###
+
+# Imports
 from .utils.snowflake_connector import get_snowflake_connection
 import logging
 import os
 from dotenv import load_dotenv
-from pathlib import Path 
+from pathlib import Path
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
 # Constants
@@ -18,7 +19,10 @@ S3_STAGE_NAME = "@CLEAN_AIR_DB.PROCESSED.dim_sensor_stage"
 PROCESSED_PREFIX = "processed/dim_sensor"
 FILE_FORMAT = "CLEAN_AIR_DB.PROCESSED.PARQUET_FMT"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
+)
+
 
 def load_dim_sensor():
     truncate_table = f"TRUNCATE table {SNOWFLAKE_TABLE};"
@@ -32,7 +36,6 @@ def load_dim_sensor():
     """
     preview_table = f"Select * from {SNOWFLAKE_TABLE} Limit 5"
 
-   
     try:
         with get_snowflake_connection() as conn:
             with conn.cursor() as cur:
@@ -85,13 +88,9 @@ def load_dim_sensor():
                 for row in cur:
                     print(row)
 
-
     except Exception as e:
         print(f"The task failed: {e}")
 
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
 if __name__ == "__main__":
     load_dim_sensor()
-

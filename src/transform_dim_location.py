@@ -2,31 +2,32 @@
 Transforms raw location data and uploads it to S3.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
 import datetime as dt
-from pathlib import Path 
-
-# 1.2 Third-party libraries
+from pathlib import Path
 from dotenv import load_dotenv
 import boto3
 import pandas as pd
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
-from .utils.extract_openaq_utils import upload_to_s3, upload_bytes_to_s3, read_json_from_s3, create_s3_key
-from .utils.transform_utils import list_s3_keys_by_prefix, transform_records_to_df, df_to_parquet, archive_s3_file
+from .utils.extract_openaq_utils import (
+    upload_to_s3,
+    upload_bytes_to_s3,
+    read_json_from_s3,
+    create_s3_key,
+)
+from .utils.transform_utils import (
+    list_s3_keys_by_prefix,
+    transform_records_to_df,
+    df_to_parquet,
+    archive_s3_file,
+)
 
-# ─── Load env vars and set up logging ──────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-
-# ─── Configuration Specific to Locations ───────────────────────────────────────
+# Constants
 BUCKET = os.getenv("S3_BUCKET")
 RAW_PREFIX = "raw/locations"
 PROCESSED_PREFIX = "processed/dim_location"
@@ -57,10 +58,11 @@ FINAL_SCHEMA = {
 
 FINAL_COLUMNS = list(FINAL_SCHEMA.keys())
 
-
 # The column for deduplication is defined separately
 DEDUPLICATION_SUBSET = ["openaq_location_id"]
-# ───────────────────────────────────────────────────────────────────────────────
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def main():
     """Orchestrates the transformation of location files and generates list of location_ids and mapping file for sensor --> location"""
@@ -98,11 +100,19 @@ def main():
     if not all_records:
         logging.warning("No valid records found after processing all files. Exiting.")
         return
-    
-    logging.info(f"Collected a total of {len(all_records)} records. Starting final transformation.")
+
+    logging.info(
+        f"Collected a total of {len(all_records)} records. Starting final transformation."
+    )
 
     # Transform Records to df
-    locations_df = transform_records_to_df(all_records, COLUMN_RENAME_MAP,DEDUPLICATION_SUBSET,FINAL_COLUMNS,FINAL_SCHEMA)
+    locations_df = transform_records_to_df(
+        all_records,
+        COLUMN_RENAME_MAP,
+        DEDUPLICATION_SUBSET,
+        FINAL_COLUMNS,
+        FINAL_SCHEMA,
+    )
 
     # Transform locations_df to parquet
     parquet_bytes = df_to_parquet(locations_df)
@@ -120,29 +130,38 @@ def main():
         archive_s3_file(s3, BUCKET, key)
 
     # Extract sensor_ids
-    locations_df['sensor_ids'] = locations_df['sensors'].apply(
-        lambda list_of_dicts: [d.get('id') for d in list_of_dicts if isinstance(d, dict)]
+    locations_df["sensor_ids"] = locations_df["sensors"].apply(
+        lambda list_of_dicts: [
+            d.get("id") for d in list_of_dicts if isinstance(d, dict)
+        ]
     )
 
     # Create location_id list as base for sensor extract step
-    location_ids = locations_df['openaq_location_id'].unique().tolist()
+    location_ids = locations_df["openaq_location_id"].unique().tolist()
 
     # Upload location_id list to S3
     upload_to_s3(s3, BUCKET, PROCESSED_PREFIX, location_ids, "location_ids")
 
     # Select location_id and sensor_ids and create one row per sensor_id
-    flat_location_df = locations_df[["sensor_ids","openaq_location_id"]].explode('sensor_ids')
+    flat_location_df = locations_df[["sensor_ids", "openaq_location_id"]].explode(
+        "sensor_ids"
+    )
 
     # Create dict with sensor_id : location_id
-    sensor_to_location_map = [flat_location_df.set_index('sensor_ids')['openaq_location_id'].to_dict()]
+    sensor_to_location_map = [
+        flat_location_df.set_index("sensor_ids")["openaq_location_id"].to_dict()
+    ]
 
     # Remove sensor data
     # clean_locations_df = locations_df.drop(columns='sensors')
 
     # Upload sensor_to_location_map to S3
-    upload_to_s3(s3, BUCKET, PROCESSED_PREFIX, sensor_to_location_map, "sensor_to_location_map")
+    upload_to_s3(
+        s3, BUCKET, PROCESSED_PREFIX, sensor_to_location_map, "sensor_to_location_map"
+    )
 
     logging.info("Transformation task for dim_location finished.")
+
 
 if __name__ == "__main__":
     main()

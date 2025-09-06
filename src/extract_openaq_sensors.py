@@ -2,46 +2,38 @@
 Extracts sensor endpoint data for a given list of locations from openaq API and uploads it to S3.
 """
 
-# ### IMPORTS ###
-
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
-
-# 1.2 Third-party libraries
 from dotenv import load_dotenv
 import boto3
-from pathlib import Path 
+from pathlib import Path
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
-from .utils.extract_openaq_utils import fetch_all_pages_new, get_yesterday_iso_date, upload_to_s3, find_latest_s3_key, read_json_from_s3
+from .utils.extract_openaq_utils import (
+    fetch_all_pages_new,
+    get_yesterday_iso_date,
+    upload_to_s3,
+    find_latest_s3_key,
+    read_json_from_s3,
+)
 
-# =============================================================================
-# 2. CONSTANTS AND GLOBAL SETTINGS
-# =============================================================================
-# S3 specific constants
+# Constants
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT = "raw/sensors"
 BASE_URL = "https://api.openaq.org/v3"
 PROCESSED_LOCATIONS_PREFIX = "processed/dim_location"
 ENDPOINT = "sensors"
 
-
-# Configure root logger
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - [%(levelname)s] - %(message)s"
+    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
 )
 
-# The S3 client is initialized once
 s3 = boto3.client("s3")
 
-# =============================================================================
-# 3. MAIN LOGIC
-# =============================================================================
+
 def main():
     """
     Orchestrates the fetching of sensors and uploading the result to S3.
@@ -56,17 +48,15 @@ def main():
         s3_client=s3,
         bucket_name=S3_BUCKET,
         prefix=PROCESSED_LOCATIONS_PREFIX,
-        file_pattern="sensor_to_location_map"
+        file_pattern="sensor_to_location_map",
     )
 
     if not location_key:
         logging.error("Could not find sensor_ids from location task. Aborting.")
         return
-    
+
     raw_data_from_s3 = read_json_from_s3(
-    s3_client=s3, 
-    bucket_name=S3_BUCKET,
-    s3_key=location_key
+        s3_client=s3, bucket_name=S3_BUCKET, s3_key=location_key
     )
 
     # Extract the actual mapping dictionary from the list
@@ -74,7 +64,7 @@ def main():
 
     # Create the final list of sensor IDs from the dictionary keys
     sensor_ids = [int(key) for key in sensor_to_location_map.keys()]
-   
+
     num_urls = len(sensor_ids)
     logging.info(f"Prepared {num_urls} URLs for sensor data fetching.")
 
@@ -83,13 +73,15 @@ def main():
 
     fetched_urls = []
 
-     # Loop through each sensor_id one by one
+    # Loop through each sensor_id one by one
     for sensor_id in sensor_ids:
         try:
             # Build the specific URL for this ID
             url = f"{BASE_URL}/{ENDPOINT}/{sensor_id}"
             endpoint = f"{ENDPOINT}/{sensor_id}"
-            logging.info(f"{i}/{num_urls} Fetching data for sensor {sensor_id} from {url} with params: {URL_PARAMS}")
+            logging.info(
+                f"{i}/{num_urls} Fetching data for sensor {sensor_id} from {url} with params: {URL_PARAMS}"
+            )
 
             # Build file_prefix
             resource = RAW_S3_ENDPOINT.split("/")[1]
@@ -119,9 +111,6 @@ def main():
 
     logging.info(f"Finished extract task for sensor for {i}/{num_urls} urls")
 
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
 if __name__ == "__main__":
     main()
- 

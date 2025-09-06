@@ -1,62 +1,48 @@
 """
 Extracts location endpoint data from openaq API and uploads it to S3.
 """
-# ### IMPORTS ###
 
-# 1.1 Standard Libraries
+# Imports
 import os
 import logging
-
-# 1.2 Third-party libraries
 from dotenv import load_dotenv
 import boto3
-from pathlib import Path 
+from pathlib import Path
 
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 1.3 Local application modules
 from .utils.extract_openaq_utils import fetch_all_pages_new, upload_to_s3
 
-# =============================================================================
-# 2. CONSTANTS AND GLOBAL SETTINGS
-# =============================================================================
-# Specific constants for this extraction script
+# Constants
+
 # Filter criteria
 # COUNTRY = os.getenv("COUNTRY_CODE", "DE")
 # PARAMETER_ID = "2"
-COORDINATES = "52.520008,13.404954" # Berlin central
-RADIUS = "15000" # radius in m around central berlin
-
-# S3 specific constants
+COORDINATES = "52.520008,13.404954"  # Berlin central
+RADIUS = "15000"  # radius in m around central berlin
 S3_BUCKET = os.getenv("S3_BUCKET")
 RAW_S3_ENDPOINT_LOCATIONS = "raw/locations"
 BASE_URL = "https://api.openaq.org/v3"
 ENDPOINT = "locations"
 
-
-# Configure root logger
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - [%(levelname)s] - %(message)s"
+    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
 )
 
-# The S3 client is initialized once
 s3 = boto3.client("s3")
 
-# =============================================================================
-# 3. MAIN LOGIC
-# =============================================================================
+
 def main():
     """
     Orchestrates the fetching of locations and uploading the result to S3.
     """
     URL_PARAMS = {
-        #"iso": COUNTRY, 
+        # "iso": COUNTRY,
         # "parameters_id": PARAMETER_ID,
         "coordinates": COORDINATES,
         "radius": RADIUS,
-        }
+    }
 
     logging.info(f"Starting locations extraction for {URL_PARAMS}")
 
@@ -86,8 +72,6 @@ def main():
 
     logging.info("Locations extraction task finished.")
 
-# =============================================================================
-# 4. SCRIPT EXECUTION
-# =============================================================================
+
 if __name__ == "__main__":
     main()
