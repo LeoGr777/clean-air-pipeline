@@ -1,6 +1,15 @@
 # Clean Air Pipeline
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11-blue.svg" alt="Python 3.11"></a>
+  <a href="https://airflow.apache.org/"><img src="https://img.shields.io/badge/Airflow-017CEE?logo=apacheairflow&logoColor=white" alt="Airflow"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="https://aws.amazon.com/"><img src="https://img.shields.io/badge/AWS-232F3E?logo=amazonaws&logoColor=white" alt="AWS"></a>
+  <a href="https://www.snowflake.com/"><img src="https://img.shields.io/badge/Snowflake-29B5E8?logo=snowflake&logoColor=white" alt="Snowflake"></a>
+  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black"></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
+</p>
+
 
 An automated, containerized ETL pipeline that fetches air-quality data from OpenAQ daily via Python scripts, stores raw JSON in AWS S3, transforms it to .parquet and loads it into Snowflake as fact-dimensional data model. Orchestrated with Apache Airflow v3 and deployable on AWS EC2 or any Docker-capable server. This pipeline helps researchers and data analysts to quickly obtain processed datasets from public sensors. The deliverable of this pipeline is a fact table (and dimension tables for context)  containing daily air quality measurements for (e.g. for particles <2.5um) for the specified location.
 
