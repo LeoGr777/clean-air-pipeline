@@ -28,7 +28,7 @@ An automated, containerized ETL pipeline that fetches air-quality data from Open
 
 ## Components & Architecture
 
-This pipeline is designed to be modular. The core consists of Python scripts running in a Docker environment. The reference implementation shown here uses a combined approach of AWS S3 as a data lake and Snowflake as a data warehouse.
+This pipeline is designed to be modular. The core consists of Python scripts running in a Docker environment. The reference implementation shown here uses AWS S3 as storage and Snowflake as a data warehouse.
 
 ### Core Prerequisites (Minimal Setup)
 * **AWS Account**
