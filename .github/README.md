@@ -73,11 +73,11 @@ This guide helps you to set up and run the entire reference implementation. The 
 
 ### Docker Setup
 
-Everything you need is packacked witin Docker. Python dependenies are included within requirements.txt.
+Everything you need is packacked witin Docker. Python dependencies are included within requirements.txt.
 
-For local development install Docker desktop. 
+For local development install Docker Desktop. 
 
-For deployment, a dockerfile containing the image and a docker-compose.yaml is provided. The dockerimage is based on the apache/airflow:3.0.6-python3.11 image with minimal adjustments.
+For deployment, a Dockerfile containing the image and a docker-compose.yaml is provided. The dockerimage is based on the apache/airflow:3.0.6-python3.11 image with minimal adjustments.
 
 The docker-compose.yaml is the Airflow v3 template provided by Apache with some adjustmens made for the project.
 
@@ -201,7 +201,7 @@ To avoid manual errors, required Snowflake objects (Database, Schemas, Tables, S
 
 Open the setup script sql/schema.sql and fill in your SNOWFLAKE_WAREHOUSE and SNOWFLAKE_DATABASE.
 
-Execute the Script: Run the entire SQL script in your Snowflake worksheet. It will create everything needed. Stages have to be created manually
+Execute the Script: Run the entire SQL script in your Snowflake worksheet. It will create everything needed. Stages have to be created manually.
 
 Get Integration Details: After running the script, execute the following command in Snowflake to get the identifiers needed to link AWS and Snowflake:
 ```sql
